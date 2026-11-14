@@ -140,3 +140,13 @@ const char *medalDesc(int i);  // descripcion larga de medalla
 
 void loadLang();             // lee el idioma de NVS (llamar en setup)
 void setLang(Lang l);        // cambia y persiste el idioma
+
+// Feature-local strings. The Adventure features (ui_*.ino) keep their own rows
+// of six -- ES, EN, FR, DE, IT, PT, the Lang order -- instead of growing the
+// positional STRINGS table, which five features editing at once would shift.
+// Same rules as STRINGS: ASCII only, no accents, in every language.
+//   static const char *const S_X[LANG_COUNT] = { "es", "en", "fr", "de", "it", "pt" };
+//   gfx->print(TL(S_X));
+inline const char *TL(const char *const six[LANG_COUNT]) {
+  return six[gLang < LANG_COUNT ? gLang : LANG_EN];
+}

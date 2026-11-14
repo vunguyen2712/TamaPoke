@@ -3,7 +3,7 @@
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://dylanpdao.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v3.12-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v3.13-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
 [![Stars](https://img.shields.io/github/stars/DylanPDao/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/DylanPDao/TamaPoke/stargazers)
@@ -359,6 +359,236 @@ picks one; and the IV-bound ceiling above still applies, so a win can never push
 stat past what its IV allows. Banked members are frozen at what they were banked
 with, and battling already costs the live pet energy — that, not a cooldown, is
 what rate-limits rematching. A fully trained creature is told so.
+
+### Adventure (menu -> ADVENTURE)
+
+Everything below hangs off one hub opened from the menu's ADVENTURE row. Each
+section is owned by one feature and documents its exact numbers.
+
+#### Wild encounters and weather
+
+ADVENTURE -> **WILD**. The row shows how many encounters are left today
+(`WILD 2/3`). The first visit ever gives **10 POKE BALLs**, once.
+
+| | |
+|---|---|
+| Encounters | **3 a day**, refilled when the day changes (the pet's clock; with no clock set the day never changes) |
+| Where from | your egg region (`pet.region`); **ALL** = any region whose sprite pack is on the card |
+| Level | the **live pet's level -5..+1**, at least 2, at most 100 |
+| Never | legendaries; species with no art; a region without its pack |
+| Evolved forms | only if the wild level has reached the level its predecessor evolves at (Pidgeotto from 18). Second branches of split evolutions other than Eevee's never appear |
+| Shiny | **1 in 256**, **2 in 256** with the SHINY CHARM |
+| Options | **FIGHT** (needs a hatched pet) or **RUN**. A lost fight, RUN, or a reset mid-fight spends the encounter |
+| Win drop | ORAN BERRY **20%**, SITRUS BERRY **5%**, LUM BERRY **3%** |
+
+After a win, throw up to **3 balls**; after the third miss it flees. LET GO
+gives up. A beaten creature waits (even overnight) until you throw or let go.
+
+| Catch chance | POKE BALL (x1.0) | GREAT BALL (x1.5) | ULTRA BALL (x2.0) |
+|---|---|---|---|
+| Common base form | 45% | 67% | 90% |
+| Rare base form | 20% | 30% | 40% |
+| Evolved, common line | 30% | 45% | 60% |
+| Evolved, rare line | 13% | 19% | 26% |
+
+Capped at **90%**. A catch joins the **party**, else the **box**, at its wild
+level (frozen, like every banked creature), with random IVs (4-31; a shiny's
+floor is 20), the learnset's moves for that level and no nickname, and is
+registered in the Pokedex. With party **and** box full you are told so and the
+ball is **not** spent.
+
+**Weather** is one per day, derived from the day number: CLEAR 3/12, SUNNY
+3/12, RAIN 2/12, WIND 2/12, SNOW 1/12, FOG 1/12. **Time** comes from the same
+hour the pet's night uses: MORNING 06-10, DAY 11-16, EVENING 17-19, NIGHT
+20-05. Both are shown on the screen. Spawn weight is the rarity's base (common
+12, rare 3, evolved 4 or 1 for a rare line) times:
+
+| | favoured (x) | halved | biome x2 |
+|---|---|---|---|
+| CLEAR | NORMAL x3 | - | meadow |
+| SUNNY | FIRE, GRASS, GROUND x3 | ICE, WATER | volcano |
+| RAIN | WATER, ELECTRIC, BUG x3 | FIRE, ROCK | beach |
+| SNOW | ICE, STEEL x4 | FIRE, GRASS | snow |
+| FOG | GHOST, PSYCHIC, POISON x3 | FLYING | forest |
+| WIND | FLYING, DRAGON x3 | BUG | mountain |
+| MORNING | NORMAL, BUG, GRASS, FLYING x2 | DARK, GHOST | |
+| DAY | FIRE, FIGHTING, GROUND, ROCK x2 | | |
+| EVENING | PSYCHIC, FAIRY, NORMAL x2 | | |
+| NIGHT | GHOST, DARK, POISON x3 | GRASS, BUG | |
+
+**GHOST** types appear **only at night, or in fog**.
+
+&nbsp;
+
+#### Daily and weekly tasks
+
+**ADVENTURE -> TASKS.** Three **daily** tasks and two **weekly** ones, shown as
+`n/target`. A finished task turns green and reads **CLAIM!** -- tap it and its
+reward goes into the BAG. Claim all three dailies and a fourth row, **BONUS**,
+pays once more. The hub row says how many are waiting (`TASKS 2!`), and the main
+screen flashes **TASK DONE!** for 3 s when one completes. Swipe left/right for
+the WEEKLY page; past either page returns to the hub.
+
+- The day is the **same RTC day the streak uses**; weeks start on **Monday**.
+  Dailies reset at midnight, weeklies on Monday. An unclaimed reward is lost at
+  the reset, so claim before midnight.
+- The tasks are picked from the day (and week) number, so the same day always
+  shows the same tasks -- but **only tasks you can actually do are offered**:
+  no tower or rematch task before the tower opens (any region's champion
+  beaten), no gym task once every gym's badge is yours, no catch task without a
+  ball, no hatch task unless an egg is waiting (or a farewell is open), no
+  evolve task unless the next evolution is within 12 levels (daily) or the
+  rest of the week (weekly), no breed task without two banked creatures.
+
+| Daily | Target | Reward | Offered when |
+|---|---|---|---|
+| FEED | 5 berries | 2 POKE BALL | always |
+| FAV BERRY | 2 favourite berries | 1 ORAN BERRY | always |
+| CLEAN | 2 baths | 2 POKE BALL | always |
+| PLAY | 2 ball games that scored | 1 ORAN BERRY | always |
+| TRAIN | 2 bag / reaction sessions with hits | 2 POKE BALL | always |
+| KEEP IT WELL | every stat >= 50 for **60 min in a row** | 1 GREAT BALL | always |
+| HATCH | 1 | 2 GREAT BALL | an egg is waiting |
+| EVOLVE | 1 | 1 SITRUS BERRY | evolution within 12 levels |
+| GYM WIN | 1 | 2 GREAT BALL | an unearned badge |
+| REMATCH WIN | 1 | 1 SITRUS BERRY | tower open |
+| SEE WILD | 3 | 3 POKE BALL | always |
+| BEAT WILD | 2 | 2 ORAN BERRY | always |
+| CATCH | 1 | 3 POKE BALL | a ball in the bag |
+| TOWER FLOOR | 3 | 2 GREAT BALL | tower open |
+| USE ITEM | 1 | 2 ORAN BERRY | a held item in the bag |
+
+| Weekly | Target | Reward | Offered when |
+|---|---|---|---|
+| CARE DAYS | 5 days cared for | 2 ULTRA BALL | always |
+| FEED | 30 | LEFTOVERS | always |
+| PLAY | 10 | 2 SITRUS BERRY | always |
+| TRAIN | 10 | FOCUS SASH | always |
+| BEAT WILD | 10 | QUICK CLAW | always |
+| CATCH | 5 | 2 ULTRA BALL | a ball in the bag |
+| GYM WIN | 2 | FOCUS SASH | an unearned badge |
+| TOWER FLOOR | 15 | LEFTOVERS | tower open |
+| REMATCH WIN | 3 | 2 LUM BERRY | tower open |
+| BREED | 1 | 5 GREAT BALL | two banked creatures |
+| EVOLVE | 1 | 2 SITRUS BERRY | evolution within the week |
+| NEW DEX ENTRY | 1 | 1 ULTRA BALL | that evolution is a new species |
+| USE ITEM | 5 | 2 LUM BERRY | a held item in the bag |
+
+**Daily bonus** (all three claimed), rotating by day: 2 GREAT BALL, 1 ULTRA
+BALL, 1 SITRUS BERRY, 1 LUM BERRY.
+
+KEEP IT WELL counts only while the device is running, and a lapse -- or a
+reboot -- starts the hour over. Design notes: `docs/adventure-tasks.md`.
+
+&nbsp;
+
+#### Battle Tower and gym rematches
+
+**Battle Tower** (ADVENTURE -> TOWER). Opens once you have beaten **any region's
+champion on either difficulty**; until then the hub row is greyed and says so.
+
+| rule | value |
+|---|---|
+| format | single battles, **3 vs 3**, you pick your three with the usual team picker |
+| levels | **everyone fights at 50** -- your team is capped OR raised to 50 for the fight; the stored creatures are never changed |
+| a run | the streak continues fight after fight and is saved; a **loss or RUN ends it**. Best streak is kept |
+| opponents | 3 distinct species, drawable (art + the region's pack on the card), at level 50 |
+| strength | base-stat-total band centred on `380 + 10 x (floor-1)`, capped at 600, +-50 (floor 1: 330-430, floor 8: 400-500, floor 23+: 550-650) |
+| IVs | 16 on floor 1, rising linearly to 31 on floor 15 and after |
+| AI | random until floor 6, the hard-mode AI from **floor 7** |
+| legendaries | none before **floor 22** (Ultra Beasts count as legendary) |
+| rewards | at every **7th** straight win: 3 ULTRA BALL + 2 berries (SITRUS, then LUM, alternating); every **14th** also a held item, cycling LEFTOVERS -> FOCUS SASH -> QUICK CLAW |
+
+A floor's team is fixed for the run (the screen shows who is waiting before you
+press START/CONTINUE, and that is who you fight); a lost run re-rolls the tower
+for the next one. Measured mean base-stat total of the opponents: ~392 on floors
+1-3, ~485 on 10-12, ~585 on 25-27.
+
+**Gym rematches** (the gym list's difficulty pill). Once a region's champion is
+beaten on **EASY**, its pill cycles EASY -> HARD -> **REMATCH**. Every trainer of
+that ladder returns stronger:
+
+| rule | value |
+|---|---|
+| levels | `level x 5/4 + 10`, capped at 100 (Brock 12/14 -> 25/27, Lance 60 -> 85, a level-72 ace -> 100) |
+| team | each creature evolves as far as its new level allows (only into drawable forms), then the team is **filled to six** with creatures of the leader's type -- drawable, never legendary, at the team's lowest raised level, the ace still last |
+| order | sequential, like the ladder: each rematch opens once the previous one is won |
+| your side | up to six, level capped to the rematch leader's best (same rule as the ladder) |
+| IVs / AI | 24 / the easy AI -- the levels are the difficulty |
+| reward | the usual training reward, plus an item: ORAN BERRY (gym leaders), SITRUS BERRY (Elite 4), LUM BERRY (champion) every win; the FIRST win of each also gives 2 ULTRA BALL (leaders), 3 ULTRA BALL (Elite 4) or LEFTOVERS (champion) |
+
+A rematch win is recorded in its own per-region mask and **never grants or
+removes a badge**.
+
+&nbsp;
+
+#### Daycare
+
+Breed an egg from two **banked** creatures (party or box). The parents are
+**not** consumed.
+
+| | Rule |
+|---|---|
+| Compatible | two different creatures that **share a type**, or where **exactly one is DITTO** |
+| Never | two DITTOs; any creature whose evolution line holds a **legendary** (Phione/Manaphy included) |
+| The egg | the **base form** of the non-Ditto parent's line -- parent **A**'s if both qualify, so pick order is the choice. Raichu + Pikachu gives Pichu; Umbreon gives Eevee |
+| Refused when | the egg would be something the egg pool cannot hatch: evolution-only, no sprite art, or its region's pack is not on the card |
+| IVs | **3 of 4** inherited, each from a random parent; the 4th is rolled at hatch like any egg (8-31, care bonus) |
+| With the OVAL CHARM | **all 4** inherited, each the **better** of the two parents |
+| Shiny | both parents shiny: **1 in 16** that the egg is shiny, rolled when it is made, on top of the egg's own normal roll |
+| IV floors | a shiny bred egg still gets the shiny floor of 20 |
+| Cooldown | **one breed per day** (the same day the care streak counts); no clock = one breed until it is set |
+| Queue | **one** bred egg at a time |
+
+There is only ever one live creature, so a bred egg is **queued** and becomes
+the **next** egg: after a farewell, release, runaway or retire it appears
+instead of a random roll. If the live creature is an **uncracked** egg, SWAP IN
+NOW (two taps) replaces it at once -- its species, its rarity label and every
+region's answer change to the bred one, so the region pill cannot re-roll it.
+The daycare screen shows the queued egg's species and its IVs (`?` = rolled at
+hatch), or whether you can breed today. Design notes:
+[`docs/adventure-daycare.md`](docs/adventure-daycare.md).
+
+&nbsp;
+
+#### Items, held items, friendship evolution, Pokedex rewards
+
+Open **ADVENTURE -> BAG**. It lists every item you own with its count, then the
+key items (charms), then every creature currently holding something. Tap an
+item to give it -- to the live creature, a party member or a box member (eggs
+hold nothing); tap a holder to take its item back. Swipe sideways to page.
+
+| Held item | Effect in battle | Spent? |
+|---|---|---|
+| ORAN BERRY | heals 10 HP once, at half HP or below | yes |
+| SITRUS BERRY | heals 25% of max HP once, at half HP or below | yes |
+| LUM BERRY | cures a status (or confusion) once, as it lands | yes |
+| FOCUS SASH | a knockout hit taken at FULL HP leaves 1 HP, once | yes |
+| LEFTOVERS | heals 1/16 of max HP at the end of every turn | never |
+| QUICK CLAW | 20% chance to act first (never over a priority move) | never |
+
+**Consumption:** a berry or the sash is gone from the creature the moment it
+triggers, in any fight, whether you then win, lose or run. Link (LAN) battles
+carry no items. The item travels with the creature: banking, bringing one back,
+party/box swaps. A creature that leaves for good -- runs away, retires early,
+is released from the party, is not kept, or is replaced -- puts its item back
+in the bag.
+
+**Friendship evolution** needs **bond >= 50** (of 100) on top of the usual
+level (its table level, plus care mistakes and any retire debt) and care
+(every stat >= 40): GOLBAT, CHANSEY, PICHU, CLEFFA, IGGLYBUFF, TOGEPI, AZURILL,
+BUDEW, BUNEARY, CHINGLING, HAPPINY, MUNCHLAX, RIOLU, WOOBAT, SWADLOON, TYPE
+NULL. The target's sprite pack must be on the card. A bonded EEVEE becomes
+ESPEON by day and UMBREON from 18:00 to 05:59 (RTC); an unbonded one takes one
+of its other branches. The card's progress page shows `BOND n/50` while waiting.
+
+**Pokedex rewards** (each once, ever): a gift every 25 registrations (cycling
+3 ORAN, 2 SITRUS, 2 LUM, QUICK CLAW, FOCUS SASH, LEFTOVERS); the **OVAL CHARM**
+at 100 (its effect is the daycare's); the **SHINY CHARM** for completing any
+region's *obtainable* dex -- the species that can actually be registered on your
+card (has art, its pack is present, hatches or evolves from something that can).
+The SHINY CHARM halves the egg's shiny roll: 1/48 -> 1/24, and the best case
+1/8 -> 1/4.
 
 ## Hardware
 

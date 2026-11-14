@@ -223,6 +223,35 @@ that have each cost a real bug:
   never consults `frameReady`, so a frozen panel photographs perfectly. That is
   what `flush_test` is for.
 
+## Adventure features (v3.13)
+
+The menu's first row, ADVENTURE, opens a hub (`ui_hub.ino`) with WILD, TASKS,
+TOWER, DAYCARE and BAG. Each feature is one pure-logic module that links into
+the tests (`wild/tasks/tower/breed/items.cpp`) plus one `.ino` tab for its
+screen (`ui_wild/ui_tasks/ui_tower/ui_daycare/ui_bag.ino`). Arduino
+concatenates the tabs after `TamaPoke.ino`; `tools/emu/gensketch.sh` does the
+same for the emulator and the tests. Design notes and numbers per feature live
+in `docs/adventure-*.md`; the player-facing numbers are in README's Adventure
+section.
+
+Shared plumbing, so features never reach into each other:
+
+- `game_events.h` -- emitters call `gameEvent(EV_..., arg)`; tasks (and the
+  Pokedex rewards) subscribe. Only the begin()'d player Pet emits.
+- `btlKind` tags every fight; `featBattleEnded(won, ran)` routes its end to the
+  feature that started it. The battle owns its foe team (`btlFoeTeam`), filled
+  by gym, rematch and tower fights alike.
+- One answer per rule: `evoCheck()` (evolution, friendship included) for the
+  pet, the card AND the tasks; `breedPossible()`, `towerUnlockedFor()`,
+  `rematchUnlockedFor()` for anything that offers those activities.
+- Feature strings are six-language rows read with `TL()`, not the positional
+  `STRINGS` table. ASCII only, as everywhere.
+- `PartyMon` is 32 bytes now (`held` + `spare` appended); `Party::begin()`
+  migrates both the party and the box from the 26- and 30-byte strides.
+
+`tests/run.sh` no longer needs SDL (only the clickable emulator does);
+`SKIP_FW=1` skips its arduino-cli step.
+
 ## Testing
 
 **The game logic and the UI can both be tested without a board.** `pet.cpp`,

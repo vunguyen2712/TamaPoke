@@ -34,6 +34,31 @@ const SaveField SAVE_FIELDS[] = {
   { "party", SK_BYTES }, { "box", SK_BYTES },
   // settings, so a restored device plays the way it did
   { "lang", SK_U8 },    { "snd", SK_BOOL },   { "vol", SK_U8 },
+  // ---- the bag (items.cpp)
+  { "bag", SK_BYTES },
+  //
+  // ---- wild encounters (wild.cpp) -- keys go below this line
+  { "wild", SK_BYTES }, { "wgift", SK_BOOL },
+  //
+  //
+  // ---- daily / weekly tasks (tasks.cpp) -- keys go below this line
+  //
+  { "tasks", SK_BYTES },   // rows, progress, claimed bits, day, week (20 B)
+  //
+  // ---- battle tower and gym rematches (tower.cpp) -- keys go below this line
+  //
+  { "twStrk", SK_U16 }, { "twBest", SK_U16 }, { "twSeed", SK_U32 },
+  { "rmWin", SK_BYTES },
+  //
+  // ---- daycare / breeding (breed.cpp) -- keys go below this line
+  { "dcare", SK_BYTES },   // queued + live bred egg, last breed day (23 B)
+  //
+  //
+  // ---- held items, friendship, dex rewards (items.cpp) -- keys go below this line
+  { "hitm", SK_U8 },    // the live pet's held item (banked ones: inside "party"/"box")
+  { "dxrw", SK_U8 },    // Pokedex rewards granted: bit0 SHINY CHARM, bit1 OVAL CHARM
+  { "dxgf", SK_U8 },    // how many every-25 dex gifts have been paid
+  //
 };
 const uint16_t SAVE_FIELD_COUNT = sizeof(SAVE_FIELDS) / sizeof(SAVE_FIELDS[0]);
 

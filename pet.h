@@ -176,6 +176,14 @@ public:
   // The newest MOVE_SLOTS moves this species has learned by its current level,
   // newest last. Used on hatch, on a fresh save, and to backfill empty slots.
   void relearnFromLevel();
+  // A creature met outside an egg (a wild catch) goes in the Pokedex: the same
+  // bits registerSpecies() sets, the shiny bit from the CATCH rather than from
+  // the live pet, and saved at once. Used by wild.cpp.
+  void registerCaught(int16_t dex, bool caughtShiny);
+  // today() for code outside the class (wild encounters, the daycare cooldown,
+  // tasks), which is private; the one definition of a day stays today(), so a
+  // feature's "once a day" and the care streak can never disagree.
+  uint32_t currentDay() const { return today(); }
   // The level at which `dex` may legally use learnset entry `i`. A level-up
   // move carries its own; a level-0 entry is a TM/tutor/egg move, which the
   // data gives no level at all, and those unlock together at TM_LEVEL.
@@ -197,6 +205,11 @@ public:
   // level() working untouched rather than needing a second source of truth.
   bool frozen = false;
   void reviveFrom(const PartyMon &m);
+  // The item this creature holds (ItemId, items.h; 0 = nothing). PER-CREATURE:
+  // it goes into the party with snapshotForParty(), comes back with
+  // reviveFrom(), and a creature that ends without being banked hands it back
+  // to the bag. Saved under "hitm".
+  uint8_t held = 0;
 
   // The player's own name, alongside the badges and the streak: it belongs to
   // whoever is playing, not to the creature, so newEgg() must never clear it.
@@ -313,6 +326,9 @@ public:
   void startRunaway();   // tambien usable desde la consola serie (RUN)
 
   bool isEgg() const { return speciesId < 0; }
+  // The RTC day the streak counts in (0 = no clock yet). Public so the daily
+  // tasks roll over on exactly the same day boundary as the streak.
+  uint32_t today() const { return lastSeenEpoch ? lastSeenEpoch / 86400 : 0; }
   uint8_t eggCracks() const { return eggTaps; }
   bool eating() const { return millis() < eatUntil; }
   bool showHeart() const { return millis() < heartUntil; }
@@ -377,6 +393,17 @@ public:
   // code: the serial console already simulates rolls, and the region tests have
   // to see which creature a switch landed on.
   int16_t eggPeek() const { return eggTarget; }
+  // "Swap it in now": an UNCRACKED egg becomes the bred species. Every region's
+  // answer becomes that species too, so the region pill cannot re-roll it, and
+  // eggRarity() reads the new species. Its own shiny roll is kept.
+  bool eggSwapTo(int16_t dex, bool bonusShiny) {
+    if (!isEgg() || eggTaps || ceremony != CER_NONE || starterPick) return false;
+    if (dex < 1 || dex > DEX_COUNT) return false;
+    setBredTarget(dex);
+    if (bonusShiny) eggShiny = true;
+    save();
+    return true;
+  }
   int16_t rollInRegion(uint8_t r, uint8_t tier);
   // Which of EEVEE's branches this player can actually be handed right now.
   // THE single answer: evolve() picks from it and lineHasUnregistered() asks it
@@ -456,11 +483,16 @@ private:
   uint32_t medalUntil = 0;     // celebracion de medalla en pantalla
   uint32_t milestoneUntil = 0; // celebracion de hito de racha
 
-  uint32_t today() const { return lastSeenEpoch ? lastSeenEpoch / 86400 : 0; }
   void registerCare();   // primer cuidado del dia: racha + vinculo
   void addBond(uint8_t amt);
   uint8_t rollIV(int bonus) const;  // una tirada 8-31 empujada por el cuidado
-  void rollIVs();                   // los 4, con las garantias de legendario/shiny
+  // los 4, con las garantias de legendario/shiny. `inherited` (a daycare egg):
+  // any entry 0..31 is used as is, anything else is rolled; the floors apply.
+  void rollIVs(const uint8_t *inherited = nullptr);
+  void setBredTarget(int16_t dex) {
+    eggTarget = dex;
+    for (int i = 0; i < REGION_COUNT; i++) eggByRegion[i] = dex;
+  }
   uint8_t ivFromGene(uint8_t gene) const;  // migracion de guardados con genes
   void defTick(bool resting);       // la calma forja la defensa (ver pet.cpp)
   void snapshotForParty();          // copy into endedMon before newEgg() wipes it

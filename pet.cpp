@@ -4,6 +4,9 @@
 #include "moves.h"
 #include "noart.h"   // speciesHasArt(): the egg pool skips what cannot be drawn
 #include "audio.h"
+#include "game_events.h"
+#include "breed.h"     // a daycare egg replaces the roll in newEgg()/hatch()
+#include "items.h"     // held items, friendship evolution, the shiny charm
 
 // Reads a blob that may be LONGER than the array we are reading it into.
 //
@@ -69,10 +72,16 @@ void Pet::newEgg() {
   for (int i = 0; i < REGION_COUNT; i++) eggByRegion[i] = 0;
   eggTarget = pickEggSpecies();  // especie oculta segun rareza y pokedex
   eggByRegion[region % REGION_COUNT] = eggTarget;
+  // A daycare egg waiting in the queue IS this egg (breed.cpp). The player's
+  // own Pet only: a scratch Pet must never spend it.
+  int16_t bredDex = 0;
+  bool bredShiny = false;
+  if (opened && breedTakeQueued(bredDex, bredShiny)) setBredTarget(bredDex);
   starterPick = (registeredCount() == 0);  // primera partida: el jugador elige inicial
   // sorteo shiny: 1/48 base, mejor con despedida y con racha/vinculo altos
   int shinyBase = (lastEnd == CER_FAREWELL ? 24 : 48) - careBonus();
   if (shinyBase < 8) shinyBase = 8;
+  shinyBase = shinyCharmOdds(shinyBase);   // the SHINY CHARM halves it (items.cpp)
   eggShiny = (random(shinyBase) == 0);
   // The debt lands on the creature about to hatch, and is spent doing so --
   // it is a one-day penalty, not a running total that compounds each retire.
@@ -89,6 +98,7 @@ void Pet::newEgg() {
   mistakeCooldown = 0;
   sleeping = false;
   frozen = false;
+  if (bredShiny) eggShiny = true;   // both parents shiny: the daycare's own roll
   save();
 }
 
@@ -260,6 +270,7 @@ void Pet::reviveFrom(const PartyMon &m) {
   ivAtk = m.ivAtk; ivDef = m.ivDef; ivSpe = m.ivSpe; ivHp = m.ivHp;
   trAtk = m.trAtk; trDef = m.trDef; trSpe = m.trSpe;
   for (int i = 0; i < MOVE_SLOTS; i++) moves[i] = m.moves[i];
+  held = itemIsHeld(m.held) ? m.held : ITEM_NONE;   // its item comes back with it
   // its banked level expressed as an age, so level() needs no special case
   ageMinutes = (uint32_t)(m.level ? m.level - 1 : 0) * MINUTES_PER_LEVEL;
   lastLearnLevel = level();     // do not replay every gate it already passed
@@ -285,15 +296,22 @@ void Pet::reviveFrom(const PartyMon &m) {
 void Pet::snapshotForParty() {
   endedKind = CER_NONE;
   if (isEgg()) return;
-  if (ceremony != CER_FAREWELL && ceremony != CER_RELEASE) return;
+  // Every ending passes through here just before newEgg(), banked or not, so
+  // this is THE one place the live creature's item is settled: it goes along
+  // into the party when the creature is banked, and back into the bag when the
+  // creature is not (a runaway, an early retire). Never onto the next egg.
+  uint8_t item = held;
+  held = ITEM_NONE;
+  if (ceremony != CER_FAREWELL && ceremony != CER_RELEASE) { heldReturn(item); return; }
   // An EARLY retire gives the creature up for good -- it is not banked at all.
   // Retiring one that has EARNED its farewell still banks it, because that is
   // simply the farewell reached by another button. retirePending is still set
   // here: update() snapshots before newEgg() spends it, and that ordering is
   // what this depends on, so retire_test drives the real update() rather than
   // calling the two halves by hand.
-  if (retireIsEarly()) return;
+  if (retireIsEarly()) { heldReturn(item); return; }
   endedMon = PartyMon();
+  endedMon.held = itemIsHeld(item) ? item : ITEM_NONE;
   endedMon.dex = speciesId;
   endedMon.level = level();
   endedMon.medals = medals;
@@ -505,10 +523,23 @@ void Pet::setRegion(uint8_t r) {
   save();
 }
 
+// Goes through registerSpecies() rather than restating its bit maths, with the
+// shiny flag borrowed for the call: one rule, two callers (CLAUDE.md trap 1).
+void Pet::registerCaught(int16_t dex, bool caughtShiny) {
+  if (dex < 1 || dex > DEX_COUNT) return;
+  bool keep = shiny;
+  shiny = caughtShiny;
+  registerSpecies(dex);
+  shiny = keep;
+  save();
+}
+
 void Pet::registerSpecies(int16_t dex) {
   if (dex < 1 || dex > DEX_COUNT) return;
+  bool fresh = !isRegistered(dex);
   dexReg[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
   if (shiny) dexShinyReg[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
+  if (fresh && opened) gameEvent(EV_DEX_REGISTER, dex);
 }
 
 // la racha y el vinculo mejoran el sorteo del huevo (0..~14)
@@ -540,6 +571,7 @@ void Pet::registerCare() {
   }
   checkMedals();
   save();
+  if (opened) gameEvent(EV_CARE_DAY, streak);
 }
 
 void Pet::addBond(uint8_t amt) {
@@ -822,12 +854,15 @@ uint8_t Pet::ivFromGene(uint8_t gene) const {
   return 8 + (uint8_t)(((uint16_t)(gene - 90) * 23) / 20);
 }
 
-void Pet::rollIVs() {
+void Pet::rollIVs(const uint8_t *inherited) {
   int bonus = careBonus();
-  ivAtk = rollIV(bonus);
-  ivDef = rollIV(bonus);
-  ivSpe = rollIV(bonus);
-  ivHp = rollIV(bonus);
+  // A daycare egg brings the IVs its parents decided; the rest are rolled.
+  #define IV_OR_ROLL(k) ((inherited && inherited[k] <= 31) ? inherited[k] : rollIV(bonus))
+  ivAtk = IV_OR_ROLL(0);
+  ivDef = IV_OR_ROLL(1);
+  ivSpe = IV_OR_ROLL(2);
+  ivHp = IV_OR_ROLL(3);
+  #undef IV_OR_ROLL
   // los legendarios nacen con 3 de 4 IV perfectos, como en los juegos
   if (speciesId >= 1 && speciesId <= DEX_COUNT && DEX_TBL[speciesId].rarity == R_LEGENDARIO) {
     uint8_t *p[4] = { &ivAtk, &ivDef, &ivSpe, &ivHp };
@@ -938,7 +973,11 @@ void Pet::hatch() {
   shiny = eggShiny;
   // IV del individuo (cada crianza es unica). Se tiran ANTES de resetear el
   // vinculo a proposito: el careBonus que los empuja es el del bicho anterior.
-  rollIVs();
+  // A daycare egg hatches with the IVs it inherited (breed.cpp); the
+  // legendary/shiny floors inside rollIVs() still apply to it.
+  uint8_t inherited[4];
+  bool bred = opened && breedTakeLive(speciesId, inherited);
+  rollIVs(bred ? inherited : nullptr);
   trAtk = trDef = trSpe = 0;
   goodTicks = 0;
   berryKnown = false;
@@ -957,6 +996,9 @@ void Pet::hatch() {
   checkMedals();     // por si nace ya en forma final (legendario)
   sfxPlay(SFX_HATCH);
   save();
+  // Only the player's own creature: the battle builds its opponents through a
+  // scratch Pet that also hatches, and those must not count as hatches.
+  if (opened) gameEvent(EV_HATCH, speciesId);
 }
 
 // ¿se dan ya las condiciones para evolucionar? Cada descuido retrasa la
@@ -964,30 +1006,29 @@ void Pet::hatch() {
 // (ninguna estadistica por debajo de 40). NO evoluciona sola: la dispara el
 // usuario tocando al bicho (evolve()), para que vea la transformacion.
 bool Pet::canEvolveNow() const {
-  if (frozen) return false;     // frozen at the form it was banked in
-  if (isEgg() || sleeping || ceremony != CER_NONE) return false;
-  const DexEntry &d = DEX_TBL[speciesId];
-  if (d.evolvesTo == 0) return false;
-  // evoPen is the day owed for retiring the PREVIOUS creature early. It rides
-  // on the same threshold careMistakes already moves, so there is one rule for
-  // "this creature evolves later" rather than two that can disagree.
-  return level() >= (uint16_t)(d.evolveLevel + careMistakes + evoPen) &&
-         lowestStat() >= 40;
+  // THE rule lives in evoCheck() (items.cpp): level + care mistakes + the
+  // retire debt, care right now, frozen/asleep/ceremony, and -- for the species
+  // that evolve by friendship -- the bond. The card's progress page asks the
+  // same function, so it cannot promise an evolution this refuses.
+  return evoCheck(*this).block == EVO_OK;
 }
 
 void Pet::evolve() {
-  if (!canEvolveNow()) return;
+  EvoCheck ec = evoCheck(*this);
+  if (ec.block != EVO_OK) return;
   const DexEntry &d = DEX_TBL[speciesId];
   prevSpeciesId = speciesId;
-  int16_t next = d.evolvesTo;
-  if (speciesId == DEX_EEVEE) {
+  int16_t next = ec.target ? ec.target : (int16_t)d.evolvesTo;
+  if (speciesId == DEX_EEVEE && !ec.target) {
     // Eevee's branch: all eight, preferring one still missing from the Pokedex,
     // which is what makes raising Eevees a collection goal rather than a
     // coin flip. Only ones this player can actually be shown -- see
     // eeveeOptions(). If none qualify the table's own 134 stands, so a card with
     // no packs at all still evolves rather than freezing.
+    // A BONDED Eevee was settled by evoCheck() (Espeon by day, Umbreon at
+    // night); this is the level branch, which leaves those two to friendship.
     int16_t opts[EEVEE_EVO_COUNT];
-    uint8_t n = eeveeOptions(opts);
+    uint8_t n = eeveeLevelOptions(*this, opts);
     if (n) {
       int16_t fresh[EEVEE_EVO_COUNT];
       uint8_t m = 0;
@@ -1002,6 +1043,7 @@ void Pet::evolve() {
   sfxPlay(SFX_EVOLVE);
   evolveUntil = millis() + EVOLVE_ANIM_MS;
   save();
+  if (opened) gameEvent(EV_EVOLVE, speciesId);
 }
 
 void Pet::feed() {
@@ -1023,6 +1065,7 @@ void Pet::feedBerry(uint8_t color) {
   eatUntil = millis() + EAT_ANIM_MS;
   registerCare();
   save();
+  if (opened) gameEvent(EV_FEED, lovesBerry(color) ? 1 : 0);
 }
 
 void Pet::feedCandy() {
@@ -1063,6 +1106,9 @@ uint8_t Pet::playResult(uint8_t score) {
   addBond((uint8_t)(2 + gain / 6));
   registerCare();
   save();
+  // Every way a ball-game session ends comes through here -- the clock, three
+  // misses, and leaving early -- so this is the one place to announce it.
+  if (opened) gameEvent(EV_PLAY, score);
   return gain;
 }
 
@@ -1110,6 +1156,7 @@ uint8_t Pet::trainSpeed(uint16_t hits) {
   addBond((uint8_t)(2 + gain / 6));
   registerCare();
   save();
+  if (opened && hits) gameEvent(EV_TRAIN, 2);   // a session with no hits trained nothing
   return gain;
 }
 
@@ -1135,6 +1182,7 @@ uint8_t Pet::trainStrength(uint16_t hits) {
   addBond((uint8_t)(2 + gain / 6));
   registerCare();
   save();
+  if (opened && hits) gameEvent(EV_TRAIN, 0);
   return gain;
 }
 
@@ -1219,6 +1267,7 @@ void Pet::clean() {
   addBond(1);
   registerCare();
   save();
+  if (opened) gameEvent(EV_CLEAN);
 }
 
 void Pet::caress() {
@@ -1303,6 +1352,7 @@ void Pet::save() {
   prefs.putUShort("shi", strHi);
   prefs.putUShort("qhi", spdHi);
   prefs.putString("nick", nick);
+  prefs.putUChar("hitm", held);
 }
 
 void Pet::load() {
@@ -1369,6 +1419,8 @@ void Pet::load() {
   strHi = prefs.getUShort("shi", 0);
   spdHi = prefs.getUShort("qhi", 0);
   prefs.getString("nick", nick, sizeof(nick));
+  held = prefs.getUChar("hitm", ITEM_NONE);
+  if (!itemIsHeld(held) || isEgg()) held = ITEM_NONE;   // absent on older saves
   // Moves load last: relearnFromLevel() needs speciesId and ageMinutes, both of
   // which are read above. A save from before moves existed has no "mvs" key and
   // leaves the array zeroed, so an established pet is handed the moveset it
