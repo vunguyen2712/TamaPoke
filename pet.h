@@ -176,6 +176,13 @@ public:
   // The newest MOVE_SLOTS moves this species has learned by its current level,
   // newest last. Used on hatch, on a fresh save, and to backfill empty slots.
   void relearnFromLevel();
+  // A creature met outside an egg (a wild catch) goes in the Pokedex: the same
+  // bits registerSpecies() sets, the shiny bit from the CATCH rather than from
+  // the live pet, and saved at once. Used by wild.cpp.
+  void registerCaught(int16_t dex, bool caughtShiny);
+  // today() for code outside the class (the wild encounters' day), which is
+  // private; the one definition of a day stays today().
+  uint32_t currentDay() const { return today(); }
   // The level at which `dex` may legally use learnset entry `i`. A level-up
   // move carries its own; a level-0 entry is a TM/tutor/egg move, which the
   // data gives no level at all, and those unlock together at TM_LEVEL.

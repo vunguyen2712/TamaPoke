@@ -38,6 +38,7 @@ const SaveField SAVE_FIELDS[] = {
   { "bag", SK_BYTES },
   //
   // ---- wild encounters (wild.cpp) -- keys go below this line
+  { "wild", SK_BYTES }, { "wgift", SK_BOOL },
   //
   //
   // ---- daily / weekly tasks (tasks.cpp) -- keys go below this line
