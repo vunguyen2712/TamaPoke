@@ -76,6 +76,10 @@ const SaveField SAVE_FIELDS[] = {
   //
   //
   // ---- two-board gifts and visits (friends.cpp) -- keys go below this line
+  { "frId", SK_U32 },    // this board's random friend id (minted by the first FRIENDS session)
+  { "frGday", SK_U32 },  // day of the last gift swap (0xFFFFFFFF = never)
+  { "frVday", SK_U32 },  // day of the last visit bonus
+  { "frJrn", SK_BYTES }, // the swap journal: one open exchange at most (18 B)
   //
 };
 const uint16_t SAVE_FIELD_COUNT = sizeof(SAVE_FIELDS) / sizeof(SAVE_FIELDS[0]);

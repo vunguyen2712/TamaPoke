@@ -797,6 +797,7 @@ void loop() {
     linkNowPoll();
     lan.tick(now);
   }
+  friendsLoop(now);   // a FRIENDS session settles gifts/visits here (ui_friends.ino)
 
   // avisa con un sonido cuando el bicho pasa a estar listo para evolucionar
   // (incluye el caso de cumplir al despertar). canEvolveNow es false durmiendo.
