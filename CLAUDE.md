@@ -82,6 +82,7 @@ second caller has its own copy of it, and nobody notices until a player does.
 | save survives an install | the four-part manifest | `new_install_prompt_erase` | fixing one still wiped a real player's pet |
 | evolution threshold | `canEvolveNow()` | `renderCardProgress()` | the card would promise an evolution that never came |
 | a region needs its pack | `sdBegin()`, at mount | files arriving later over `PUT` | the pack you just downloaded stayed greyed out until a reboot |
+| a badge belongs to its ladder | `winBadge(region, ...)` | `startTrainerBattle()` never set `btlRegion` | every win outside Kanto went to Kanto's badge (or nowhere); `badge_region_test` |
 | the 3 s hold is for the pet | a list of screens to EXCLUDE | every screen not on that list | holding a PARTY SLOT offered to release the LIVE pet |
 
 **A guard written as a list of EXCLUSIONS is this trap pre-loaded.** The hold
