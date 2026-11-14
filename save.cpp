@@ -47,6 +47,7 @@ const SaveField SAVE_FIELDS[] = {
   //
   //
   // ---- daycare / breeding (breed.cpp) -- keys go below this line
+  { "dcare", SK_BYTES },   // queued + live bred egg, last breed day (23 B)
   //
   //
   // ---- held items, friendship, dex rewards (items.cpp) -- keys go below this line

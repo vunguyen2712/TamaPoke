@@ -385,7 +385,30 @@ section is owned by one feature and documents its exact numbers.
 
 #### Daycare
 
-(to be written by the daycare feature)
+Breed an egg from two **banked** creatures (party or box). The parents are
+**not** consumed.
+
+| | Rule |
+|---|---|
+| Compatible | two different creatures that **share a type**, or where **exactly one is DITTO** |
+| Never | two DITTOs; any creature whose evolution line holds a **legendary** (Phione/Manaphy included) |
+| The egg | the **base form** of the non-Ditto parent's line -- parent **A**'s if both qualify, so pick order is the choice. Raichu + Pikachu gives Pichu; Umbreon gives Eevee |
+| Refused when | the egg would be something the egg pool cannot hatch: evolution-only, no sprite art, or its region's pack is not on the card |
+| IVs | **3 of 4** inherited, each from a random parent; the 4th is rolled at hatch like any egg (8-31, care bonus) |
+| With the OVAL CHARM | **all 4** inherited, each the **better** of the two parents |
+| Shiny | both parents shiny: **1 in 16** that the egg is shiny, rolled when it is made, on top of the egg's own normal roll |
+| IV floors | a shiny bred egg still gets the shiny floor of 20 |
+| Cooldown | **one breed per day** (the same day the care streak counts); no clock = one breed until it is set |
+| Queue | **one** bred egg at a time |
+
+There is only ever one live creature, so a bred egg is **queued** and becomes
+the **next** egg: after a farewell, release, runaway or retire it appears
+instead of a random roll. If the live creature is an **uncracked** egg, SWAP IN
+NOW (two taps) replaces it at once -- its species, its rarity label and every
+region's answer change to the bred one, so the region pill cannot re-roll it.
+The daycare screen shows the queued egg's species and its IVs (`?` = rolled at
+hatch), or whether you can breed today. Design notes:
+[`docs/adventure-daycare.md`](docs/adventure-daycare.md).
 
 &nbsp;
 

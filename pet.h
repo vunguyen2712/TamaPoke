@@ -377,6 +377,20 @@ public:
   // code: the serial console already simulates rolls, and the region tests have
   // to see which creature a switch landed on.
   int16_t eggPeek() const { return eggTarget; }
+  // The daycare (breed.cpp). dayNumber() is the same day registerCare() counts,
+  // so its once-a-day cooldown and the care streak can never disagree.
+  uint32_t dayNumber() const { return today(); }
+  // "Swap it in now": an UNCRACKED egg becomes the bred species. Every region's
+  // answer becomes that species too, so the region pill cannot re-roll it, and
+  // eggRarity() reads the new species. Its own shiny roll is kept.
+  bool eggSwapTo(int16_t dex, bool bonusShiny) {
+    if (!isEgg() || eggTaps || ceremony != CER_NONE || starterPick) return false;
+    if (dex < 1 || dex > DEX_COUNT) return false;
+    setBredTarget(dex);
+    if (bonusShiny) eggShiny = true;
+    save();
+    return true;
+  }
   int16_t rollInRegion(uint8_t r, uint8_t tier);
   // Which of EEVEE's branches this player can actually be handed right now.
   // THE single answer: evolve() picks from it and lineHasUnregistered() asks it
@@ -460,7 +474,13 @@ private:
   void registerCare();   // primer cuidado del dia: racha + vinculo
   void addBond(uint8_t amt);
   uint8_t rollIV(int bonus) const;  // una tirada 8-31 empujada por el cuidado
-  void rollIVs();                   // los 4, con las garantias de legendario/shiny
+  // los 4, con las garantias de legendario/shiny. `inherited` (a daycare egg):
+  // any entry 0..31 is used as is, anything else is rolled; the floors apply.
+  void rollIVs(const uint8_t *inherited = nullptr);
+  void setBredTarget(int16_t dex) {
+    eggTarget = dex;
+    for (int i = 0; i < REGION_COUNT; i++) eggByRegion[i] = dex;
+  }
   uint8_t ivFromGene(uint8_t gene) const;  // migracion de guardados con genes
   void defTick(bool resting);       // la calma forja la defensa (ver pet.cpp)
   void snapshotForParty();          // copy into endedMon before newEgg() wipes it
