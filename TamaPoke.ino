@@ -713,6 +713,7 @@ void setup() {
   party.begin();
   pet.begin();
   bag.begin();
+  dexRewardsBegin(&pet);   // Pokedex rewards (items.cpp): subscribe + catch up
   // feature modules load after the creature, the party and the bag they read
   wildBegin();
   tasksBegin(pet);
@@ -1244,7 +1245,7 @@ void onSwipeV(int dir) {
   if (boxOpen) { boxOpen = false; boxSel = 0; return; }   // vertical backs out
   if (partyOpen) {
     if (partyDetail) { partyDetail = 0; return; }
-    if (partyPick) { partyPick = false; pet.endedKind = CER_NONE; }
+    if (partyPick) { partyPick = false; bagLetGoEnded(); }
     partyOpen = false;
     return;
   }
@@ -1315,6 +1316,13 @@ void renderMonSheet(const PartyMon &m, bool fromBox) {
   gfx->setTextSize(1);
   gfx->setCursor(CX - (int)strlen(st) * 3, 300);
   gfx->print(st);
+  if (m.held) {                       // its held item travels with it
+    char hl[32];
+    bagHeldLine(hl, sizeof(hl), m.held);
+    gfx->setTextColor(UI_BAR_WARN);
+    gfx->setCursor(CX - (int)strlen(hl) * 3, 311);
+    gfx->print(hl);
+  }
 
   // Bringing one back is only offered while an egg is waiting. Otherwise it
   // would silently destroy whatever creature is currently alive, and a rule the
@@ -1465,6 +1473,8 @@ bool monSheetConfirmTap(int16_t x, int16_t y, bool fromBox) {
   uiConfirmRects(&c1t, &c1b, &c2t, &c2b);
   if (x < CONFIRM_BTN_X || x > CONFIRM_BTN_X + CONFIRM_BTN_W) return false;
   if (y >= c1t && y <= c1b) {            // YES -- and it does not come back
+    // ...but its held item does: back into the bag, not gone with it.
+    heldReturn(fromBox ? party.box[boxDetail - 1].held : party.slots[partyDetail - 1].held);
     if (fromBox) { party.boxReleaseAt(boxDetail - 1); boxDetail = 0; }
     else { party.releaseAt(partyDetail - 1); partyDetail = 0; }
     // A half-finished swap named a slot that may now be empty, so disarm both
@@ -1536,7 +1546,7 @@ void partyTap(int16_t x, int16_t y) {
   if ((y >= 372 && y <= 416 && x >= 133 && x <= 333) || y < 34) {
     if (partyPick) {                 // declined the swap: the pet is let go
       partyPick = false;
-      pet.endedKind = CER_NONE;
+      bagLetGoEnded();               // ...and its held item goes back to the bag
     }
     partyOpen = false;
     sfxPlay(SFX_TAP);
@@ -1565,6 +1575,7 @@ void partyTap(int16_t x, int16_t y) {
       sfxPlay(SFX_TAP);
       return;
     }
+    heldReturn(party.slots[i].held);   // the one replaced leaves its item behind
     party.replaceAt(i, pet.endedMon);
     snprintf(partyBannerName, sizeof(partyBannerName), "%s",
              pet.endedMon.nick[0] ? pet.endedMon.nick : DEX_TBL[pet.endedMon.dex].name);
@@ -1628,7 +1639,7 @@ void onSwipe(int dir) {
   }
   if (partyOpen) {
     if (partyDetail) { partyDetail = 0; return; }
-    if (partyPick) { partyPick = false; pet.endedKind = CER_NONE; }
+    if (partyPick) { partyPick = false; bagLetGoEnded(); }
     partyOpen = false;
     return;
   }
@@ -3102,6 +3113,14 @@ void renderCardStats() {
   drawCardStat(184, T(S_STAT_SPE), pet.speStat(), 360, UI_BAR_WARN, pet.ivSpe);
   drawCardStat(224, T(S_STAT_VIT), pet.vitStat(), 360, UI_BAR_OK, pet.ivHp);
   drawCardStat(264, T(S_STAT_WGT), pet.weight, 100, 0xB3C8, IV_NONE);
+  if (pet.held) {                     // the held item, given from the BAG
+    char hl[32];
+    bagHeldLine(hl, sizeof(hl), pet.held);
+    gfx->setTextColor(UI_INK);
+    gfx->setTextSize(2);
+    gfx->setCursor(CX - (int)strlen(hl) * 6, 312);
+    gfx->print(hl);
+  }
 
 }
 
@@ -3314,7 +3333,7 @@ static void btlSfxFor(const TurnLog &lg) {
   if (lg.move && MOVE_TBL[lg.move].cat == MC_STATUS && !lg.missed) sfxPlay(SFX_STATUS);
 }
 
-static void btlNarrate(const Combatant &actor, const Combatant &target, const TurnLog &lg) {
+static void btlNarrateMove(const Combatant &actor, const Combatant &target, const TurnLog &lg) {
   if (lg.skipped) return;
   btlSfxFor(lg);
   if (lg.hurtSelf) { btlSay(T(S_BTL_HURTSELF)); return; }
@@ -3331,6 +3350,13 @@ static void btlNarrate(const Combatant &actor, const Combatant &target, const Tu
     if (lg.inflicted < 7) btlSay(T(S_BTL_STATUS), target.name, T(AIL_STR[lg.inflicted]));
   }
   if (lg.targetFainted) btlSay(T(S_BTL_FAINT), target.name);
+}
+
+// The move, then any held item it set off on either side (ui_bag.ino words it).
+static void btlNarrate(const Combatant &actor, const Combatant &target, const TurnLog &lg) {
+  btlNarrateMove(actor, target, lg);
+  if (lg.defItem) btlSay(bagItemLine(lg.defItem), target.name, ITEM_TBL[lg.defItem].name);
+  if (lg.atkItem) btlSay(bagItemLine(lg.atkItem), actor.name, ITEM_TBL[lg.atkItem].name);
 }
 
 // Builds one opponent through Pet, so it gets the same stat formula and the
@@ -3361,14 +3387,16 @@ static void buildSquad(uint8_t maxLvl, uint8_t maxCount, uint16_t mask) {
     Pet tmp = pet;                       // a copy: the real pet is untouched
     if (maxLvl && tmp.level() > maxLvl)
       tmp.ageMinutes = (uint32_t)(maxLvl - 1) * MINUTES_PER_LEVEL;
-    combatantFromPet(btlSquad[btlSquadN++], tmp);
+    combatantFromPet(btlSquad[btlSquadN], tmp);
+    btlSquad[btlSquadN++].holder = HOLDER_PET;   // a spent berry leaves THIS creature
     btlPetIn = true;      // the training reward goes to whoever fought for it
   }
   for (int i = 0; i < PARTY_SLOTS && btlSquadN < maxCount; i++) {
     if (party.slots[i].empty() || !(mask & (1 << (i + 1)))) continue;
     PartyMon m = party.slots[i];
     if (maxLvl && m.level > maxLvl) m.level = maxLvl;
-    combatantFromParty(btlSquad[btlSquadN++], m);
+    combatantFromParty(btlSquad[btlSquadN], m);
+    btlSquad[btlSquadN++].holder = HOLDER_PARTY(i);
   }
   if (btlSquadN) btlYou = btlSquad[0];
 }
@@ -3632,7 +3660,12 @@ static void btlResolve(uint8_t yourMove) {
   }
   (void)foeSwitched;
 
-  bool youFirst = battleMovesFirst(btlYou, yourMove, btlFoe, foeMove);
+  uint8_t claw = 0;
+  bool youFirst = battleMovesFirst(btlYou, yourMove, btlFoe, foeMove, &claw);
+  if (claw) {
+    const Combatant &q = claw == 1 ? btlYou : btlFoe;
+    btlSay(bagItemLine(ITEM_QUICK_CLAW), q.name, ITEM_TBL[ITEM_QUICK_CLAW].name);
+  }
   Combatant *a = youFirst ? &btlYou : &btlFoe;
   Combatant *b = youFirst ? &btlFoe : &btlYou;
   uint8_t ma = youFirst ? yourMove : foeMove;
@@ -3654,10 +3687,13 @@ static void btlResolve(uint8_t yourMove) {
   if (btlLink && btlLinkHost) btlShipResult(yourMove, foeMove, hp0You, hp0Foe);
   if (!btlYou.fainted() && !btlFoe.fainted()) {
     battleEndTurn(btlYou, lg);
-    if (lg.damage) btlNarrate(btlYou, btlYou, lg);
+    if (lg.damage || lg.atkItem) btlNarrate(btlYou, btlYou, lg);
     battleEndTurn(btlFoe, lg);
-    if (lg.damage) btlNarrate(btlFoe, btlFoe, lg);
+    if (lg.damage || lg.atkItem) btlNarrate(btlFoe, btlFoe, lg);
   }
+  // A berry or sash spent this turn is gone from the creature that held it,
+  // NOW -- not at the end, which a fight has too many ways of reaching.
+  bagBattleSync();
   // Someone went down. The replacement is NOT swapped in here -- that made the
   // change instant and read as a jump cut. Flag it, let the sprite drop out of
   // frame, and swap when the player dismisses the message.
@@ -5136,7 +5172,6 @@ void renderCardMedals() {
 // pagina 3: progreso (nivel, evolucion, descuidos) — saca a la luz mecanicas
 // que antes eran invisibles (cuanto falta para subir/evolucionar y por que)
 void renderCardProgress() {
-  const DexEntry &d = DEX_TBL[pet.speciesId];
   gfx->setTextColor(UI_INK);
   gfx->setTextSize(3);
   gfx->setCursor(CX - strlen(T(S_PROGRESS)) * 9, 44);
@@ -5166,24 +5201,14 @@ void renderCardProgress() {
   gfx->setTextColor(UI_TRACK);
   gfx->setCursor(CX - strlen(T(S_EVO_LABEL)) * 6, 230);
   gfx->print(T(S_EVO_LABEL));
+  // cardEvoLine() (ui_bag.ino) asks evoCheck(), the SAME function
+  // canEvolveNow() asks: the level sum with careMistakes and the retire debt,
+  // the care floor, and the bond for a friendship evolution. A card with its
+  // own copy of that rule once promised an evolution that never came.
   char evoBuf[28];
-  const char *evo;
+  const char *evo = evoBuf;
   uint16_t evoCol = UI_INK;
-  if (d.evolvesTo == 0) {
-    evo = T(S_FINAL_FORM);
-  } else {
-    // The SAME sum canEvolveNow() uses -- including the day owed for retiring
-    // the previous creature early. A card that left evoPenalty() out would
-    // promise an evolution that then does not happen.
-    int needed = d.evolveLevel + pet.careMistakes + pet.evoPenalty();
-    if (pet.level() >= needed) {
-      if (pet.lowestStat() >= 40) { evo = T(S_EVO_READY); evoCol = UI_BAR_OK; }
-      else { evo = T(S_EVO_BLOCKED); evoCol = UI_BAR_BAD; }
-    } else {
-      snprintf(evoBuf, sizeof(evoBuf), T(S_EVO_IN_FMT), needed - pet.level());
-      evo = evoBuf;
-    }
-  }
+  cardEvoLine(evoBuf, sizeof(evoBuf), &evoCol);
   gfx->setTextColor(evoCol);
   gfx->setCursor(CX - strlen(evo) * 6, 256);
   gfx->print(evo);

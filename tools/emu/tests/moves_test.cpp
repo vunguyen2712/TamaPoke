@@ -107,7 +107,7 @@ int main() {
   // --- party migration: a blob written in the OLD layout (no moves[]) must
   // survive, with slots still aligned. This is the case that silently
   // corrupted the party if migrated by a plain getBytes().
-  const size_t oldStride = sizeof(PartyMon) - MOVE_SLOTS;
+  const size_t oldStride = PARTYMON_V1_SIZE;   // the real pre-moves record
   uint8_t legacy[PARTY_SLOTS * (sizeof(PartyMon))];
   for (int i = 0; i < PARTY_SLOTS; i++) {
     PartyMon m;

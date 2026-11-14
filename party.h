@@ -16,6 +16,12 @@
 // key is purely additive and cannot corrupt anything.
 #define BOX_SLOTS 18
 #define MOVE_SLOTS 4    // the same four every trainer gets in the real games
+// Every record size PartyMon has ever had, oldest first. Party::begin() reads a
+// blob written at any of these strides; it never GUESSES a stride from the blob
+// length alone, which cannot tell a stride change from a slot-count change.
+//   26: v1.x, before moves[]       30: moves[] (v1.9)       32: held item
+#define PARTYMON_V1_SIZE 26
+#define PARTYMON_V2_SIZE 30
 
 // A retired pet. Its level is frozen at the moment it joined; it does not keep
 // ageing, and nothing about it can be trained any further.
@@ -32,6 +38,12 @@ struct PartyMon {
   // Appended at the END of the struct on purpose -- Party::begin() migrates
   // older, shorter blobs by length, and that only works if nothing moved.
   uint8_t moves[MOVE_SLOTS] = { 0, 0, 0, 0 };
+  // The item it holds (an ItemId, items.h; 0 = nothing). Appended at the END
+  // for the same reason as moves[]. `spare` is spelled out rather than left to
+  // the compiler's padding so the record is 32 bytes of DEFINED content: an
+  // implicit pad byte would be whatever was on the stack and land in NVS.
+  uint8_t held = 0;
+  uint8_t spare = 0;
 
   bool empty() const { return dex < 1; }
 };

@@ -7,6 +7,7 @@
 #include "party.h"
 #include "dex.h"
 #include <cstdio>
+#include <cstring>
 uint32_t g_seed=3; FakeSerial Serial; FakeESP ESP; FakeWire Wire;
 volatile int g_touchX=0,g_touchY=0; volatile bool g_touchDown=false; bool wasPressed=false;
 uint32_t millis(){return 0;} void FakeESP::restart(){exit(0);}
@@ -79,6 +80,33 @@ int main(){
     r.swapPartyBox((uint8_t)free, 0);
     ck(r.slots[1].dex==9 && r.box[0].empty(),
        "withdrawing into a free slot moves it without displacing anyone");
+  }
+
+  // A box written BEFORE PartyMon grew its held item (30-byte records). The box
+  // once had no stride migration at all -- only the party did -- so the first
+  // record change after the box existed would have emptied it.
+  { Preferences seed; seed.begin("tamapoke", false);
+    static uint8_t oldBox[BOX_SLOTS * PARTYMON_V2_SIZE];
+    static uint8_t oldParty[PARTY_SLOTS * PARTYMON_V2_SIZE];
+    memset(oldBox, 0, sizeof(oldBox)); memset(oldParty, 0, sizeof(oldParty));
+    for (int i=0;i<BOX_SLOTS;i++) { PartyMon m=mk(200+i, 10+i); m.moves[2]=3;
+      memcpy(oldBox + i*PARTYMON_V2_SIZE, &m, PARTYMON_V2_SIZE); }
+    for (int i=0;i<PARTY_SLOTS;i++) { PartyMon m=mk(100+i, 50); m.shiny = (i==3);
+      memcpy(oldParty + i*PARTYMON_V2_SIZE, &m, PARTYMON_V2_SIZE); }
+    seed.putBytes("box", oldBox, sizeof(oldBox));
+    seed.putBytes("party", oldParty, sizeof(oldParty));
+    seed.end();
+    Party r; r.begin();
+    bool ok=true;
+    for (int i=0;i<BOX_SLOTS;i++)
+      if (r.box[i].dex!=200+i || r.box[i].level!=10+i || r.box[i].moves[2]!=3 || r.box[i].held) ok=false;
+    ck(ok, "a pre-held-item box keeps all 18 records, aligned, holding nothing");
+    bool okp=true;
+    for (int i=0;i<PARTY_SLOTS;i++) if (r.slots[i].dex!=100+i || r.slots[i].held) okp=false;
+    ck(okp && r.slots[3].shiny, "and the party beside it too");
+    Preferences chk; chk.begin("tamapoke", true);
+    ck(chk.getBytesLength("box")==sizeof(r.box), "the box is rewritten at the new stride");
+    chk.end();
   }
 
   printf("%s\n", bad?"FAILURES":"all good");

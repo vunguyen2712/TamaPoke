@@ -519,7 +519,42 @@ hatch), or whether you can breed today. Design notes:
 
 #### Items, held items, friendship evolution, Pokedex rewards
 
-(to be written by the items feature)
+Open **ADVENTURE -> BAG**. It lists every item you own with its count, then the
+key items (charms), then every creature currently holding something. Tap an
+item to give it -- to the live creature, a party member or a box member (eggs
+hold nothing); tap a holder to take its item back. Swipe sideways to page.
+
+| Held item | Effect in battle | Spent? |
+|---|---|---|
+| ORAN BERRY | heals 10 HP once, at half HP or below | yes |
+| SITRUS BERRY | heals 25% of max HP once, at half HP or below | yes |
+| LUM BERRY | cures a status (or confusion) once, as it lands | yes |
+| FOCUS SASH | a knockout hit taken at FULL HP leaves 1 HP, once | yes |
+| LEFTOVERS | heals 1/16 of max HP at the end of every turn | never |
+| QUICK CLAW | 20% chance to act first (never over a priority move) | never |
+
+**Consumption:** a berry or the sash is gone from the creature the moment it
+triggers, in any fight, whether you then win, lose or run. Link (LAN) battles
+carry no items. The item travels with the creature: banking, bringing one back,
+party/box swaps. A creature that leaves for good -- runs away, retires early,
+is released from the party, is not kept, or is replaced -- puts its item back
+in the bag.
+
+**Friendship evolution** needs **bond >= 50** (of 100) on top of the usual
+level (its table level, plus care mistakes and any retire debt) and care
+(every stat >= 40): GOLBAT, CHANSEY, PICHU, CLEFFA, IGGLYBUFF, TOGEPI, AZURILL,
+BUDEW, BUNEARY, CHINGLING, HAPPINY, MUNCHLAX, RIOLU, WOOBAT, SWADLOON, TYPE
+NULL. The target's sprite pack must be on the card. A bonded EEVEE becomes
+ESPEON by day and UMBREON from 18:00 to 05:59 (RTC); an unbonded one takes one
+of its other branches. The card's progress page shows `BOND n/50` while waiting.
+
+**Pokedex rewards** (each once, ever): a gift every 25 registrations (cycling
+3 ORAN, 2 SITRUS, 2 LUM, QUICK CLAW, FOCUS SASH, LEFTOVERS); the **OVAL CHARM**
+at 100 (its effect is the daycare's); the **SHINY CHARM** for completing any
+region's *obtainable* dex -- the species that can actually be registered on your
+card (has art, its pack is present, hatches or evolves from something that can).
+The SHINY CHARM halves the egg's shiny roll: 1/48 -> 1/24, and the best case
+1/8 -> 1/4.
 
 ## Hardware
 
