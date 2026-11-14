@@ -1330,10 +1330,7 @@ void renderMonSheet(const PartyMon &m, bool fromBox) {
   char ty[24];
   if (d.type2 == T_NONE) snprintf(ty, sizeof(ty), "%s", typeName(d.type1));
   else snprintf(ty, sizeof(ty), "%s/%s", typeName(d.type1), typeName(d.type2));
-  gfx->setTextColor(UI_TRACK);
-  gfx->setTextSize(1);
-  gfx->setCursor(CX - (int)strlen(ty) * 3, 64);
-  gfx->print(ty);
+  personaTypeLine(ty, m.spare, 64);   // typing + personality (ui_persona.ino)
 
   for (int i = 0; i < MOVE_SLOTS; i++)
     drawMoveRow(78 + i * 52, m.moves[i], false, m.dex);
@@ -3115,9 +3112,10 @@ void renderCardProfile() {
   gfx->setTextSize(2);
   gfx->setCursor(CX - strlen(info) * 6, 296);
   gfx->print(info);
+  personaCardLine(318);   // its personality (ui_persona.ino)
 
   gfx->setTextColor(UI_TRACK);
-  gfx->setCursor(CX - strlen(T(S_RENAME_HINT)) * 6, 332);
+  gfx->setCursor(CX - strlen(T(S_RENAME_HINT)) * 6, 342);
   gfx->print(T(S_RENAME_HINT));
 }
 

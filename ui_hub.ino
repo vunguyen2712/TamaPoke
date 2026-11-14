@@ -288,6 +288,7 @@ void featSceneOverlay() {
 // Last, above everything but the menu: badges and notices.
 void featMainOverlay() {
   wildMainBadge();
+  personaMainOverlay();   // the favourite-care cheer (ui_persona.ino)
 }
 
 // A tap on the main screen, before the menu band and the pet. True = consumed.

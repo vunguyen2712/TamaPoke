@@ -7,6 +7,7 @@
 #include "game_events.h"
 #include "breed.h"     // a daycare egg replaces the roll in newEgg()/hatch()
 #include "items.h"     // held items, friendship evolution, the shiny charm
+#include "persona.h"   // personalities: what each trait does to care and drain
 
 // Reads a blob that may be LONGER than the array we are reading it into.
 //
@@ -98,6 +99,7 @@ void Pet::newEgg() {
   mistakeCooldown = 0;
   sleeping = false;
   frozen = false;
+  persona = PT_NONE;   // an egg has no personality until it hatches
   if (bredShiny) eggShiny = true;   // both parents shiny: the daycare's own roll
   save();
 }
@@ -133,7 +135,8 @@ void Pet::syncClock(uint32_t nowEpoch) {
       continue;
     }
     if (sleeping) {  // descanso: baja lento y con suelo, igual que en vivo
-      energy = clamp100(energy + 6);
+      // the same answer as the live tick: asleep, a trait only ever helps
+      energy = clamp100(energy + 6 - personaDrain(persona, ageMinutes, poops, true).energy);
       if (ageMinutes % 2 == 0) {
         fullness = dropTo(fullness, 1, 30);
         joy = dropTo(joy, 1, 35);
@@ -192,7 +195,9 @@ void Pet::tick() {
   // cero, sin descuidos ni escapadas). despierto: comida -2/min, hig/joy -1/min.
   // El peso aun se quema y el descanso cuenta para la DEF (ver defTick).
   if (sleeping) {
-    energy = clamp100(energy + 6);
+    // A trait changes nothing asleep but SLEEPY's faster refill (persona.cpp),
+    // so the sleep floors -- the overnight safety net -- are untouched.
+    energy = clamp100(energy + 6 - personaDrain(persona, ageMinutes, poops, true).energy);
     if (weight > 0 && ageMinutes % 3 == 0) weight--;
     if (ageMinutes % 2 == 0) {                 // ~4x mas lento que despierto
       fullness = dropTo(fullness, 1, 30);
@@ -207,8 +212,11 @@ void Pet::tick() {
 
   if (ageMinutes % MINUTES_PER_LEVEL == 0) sfxPlay(SFX_LEVEL);  // subio de nivel (despierto)
 
-  fullness = clamp100(fullness - 2);
-  energy = clamp100(energy - 1);
+  // The personality's nudge, awake only. Counted on its own minute counter, not
+  // ageMinutes, which stands still for a frozen (revived) companion.
+  PersonaDrain pd = personaDrain(persona, ++nudgeTick, poops, false);
+  fullness = clamp100(fullness - 2 - pd.food);
+  energy = clamp100(energy - 1 - pd.energy);
   if (fullness > 40 && poops < 3 && random(100) < 15) poops++;
 
   hygiene = clamp100(hygiene - 1 - 4 * poops);
@@ -218,7 +226,7 @@ void Pet::tick() {
 
   defTick(false);  // la calma forja la defensa
 
-  int dJoy = -1;
+  int dJoy = -1 - personaDrain(persona, nudgeTick, poops, false).joy;  // TIDY minds the poop
   if (fullness < 30) dJoy -= 2;
   if (hygiene < 30) dJoy -= 2;
   joy = clamp100(joy + dJoy);
@@ -271,6 +279,8 @@ void Pet::reviveFrom(const PartyMon &m) {
   trAtk = m.trAtk; trDef = m.trDef; trSpe = m.trSpe;
   for (int i = 0; i < MOVE_SLOTS; i++) moves[i] = m.moves[i];
   held = itemIsHeld(m.held) ? m.held : ITEM_NONE;   // its item comes back with it
+  // and its personality; 0 (banked before personalities existed) stays none
+  persona = personaValid(m.spare) ? m.spare : PT_NONE;
   // its banked level expressed as an age, so level() needs no special case
   ageMinutes = (uint32_t)(m.level ? m.level - 1 : 0) * MINUTES_PER_LEVEL;
   lastLearnLevel = level();     // do not replay every gate it already passed
@@ -323,6 +333,7 @@ void Pet::snapshotForParty() {
   endedMon.trDef = trDef;
   endedMon.trSpe = trSpe;
   endedMon.shiny = shiny ? 1 : 0;
+  endedMon.spare = persona;   // PartyMon::spare carries the personality
   for (int i = 0; i < MOVE_SLOTS; i++) endedMon.moves[i] = moves[i];  // frozen too
   strncpy(endedMon.nick, nick, sizeof(endedMon.nick) - 1);
   endedMon.nick[sizeof(endedMon.nick) - 1] = 0;
@@ -986,6 +997,9 @@ void Pet::hatch() {
   medals = 0;
   newMedal = 0;
   nick[0] = 0;
+  // One personality, rolled once, for life. Only the player's own creature:
+  // a scratch Pet (a battle foe) has no use for one and must not spend a roll.
+  persona = opened ? personaRoll() : PT_NONE;
   registerSpecies(speciesId);  // criado = registrado en la pokedex
   // Start empty: checkLearnGates() fills the level-1 moves. Seeding from TMs
   // instead would hand a newborn FIRE BLAST, which no level 1 creature knows.
@@ -1053,14 +1067,15 @@ void Pet::feed() {
 void Pet::feedBerry(uint8_t color) {
   if (ceremony != CER_NONE) return;
   if (isEgg() || sleeping) return;
+  PersonaEffect pe = enjoy(lovesBerry(color) ? PC_FAV_BERRY : PC_BERRY, lovesBerry(color) ? 10 : 0);
   if (lovesBerry(color)) {
-    fullness = clamp100(fullness + 35);
+    fullness = clamp100(fullness + 35 + pe.food);
     joy = clamp100(joy + 10);
     heartUntil = millis() + HEART_MS;  // "le encanta!"
     berryKnown = true;                 // descubierto: se muestra en la ficha
     addBond(2);
   } else {
-    fullness = clamp100(fullness + 25);
+    fullness = clamp100(fullness + 25 + pe.food);   // PICKY: +20
   }
   eatUntil = millis() + EAT_ANIM_MS;
   registerCare();
@@ -1071,6 +1086,7 @@ void Pet::feedBerry(uint8_t color) {
 void Pet::feedCandy() {
   if (ceremony != CER_NONE) return;
   if (isEgg() || sleeping) return;
+  enjoy(PC_CANDY, 12);
   fullness = clamp100(fullness + 10);
   joy = clamp100(joy + 12);
   weight = clamp100(weight + 12);  // las chuches pasan factura
@@ -1092,7 +1108,9 @@ uint8_t Pet::playResult(uint8_t score) {
   uint16_t v = (uint16_t)trDef + gain;
   trDef = v > trMaxDef() ? trMaxDef() : (uint8_t)v;
   gain = trDef - before;
-  joy = clamp100(joy + 5 + (score > 15 ? 30 : score * 2));
+  uint8_t playJoy = 5 + (score > 15 ? 30 : score * 2);
+  joy = clamp100(joy + playJoy);
+  enjoy(PC_PLAY, playJoy);   // PLAYFUL: the session's joy, twice
   energy = dropTo(energy, 10 + score / 2, 5);
   fullness = dropTo(fullness, 5, 5);
   int burn = (int)weight - score * 2;  // el ejercicio quema peso
@@ -1148,6 +1166,7 @@ uint8_t Pet::trainSpeed(uint16_t hits) {
   int burn = (int)weight - hits / 2;
   weight = burn > 0 ? burn : 0;
   joy = clamp100(joy + 4);
+  if (hits) enjoy(PC_TRAIN, 4);   // ENERGETIC: a session it actually played
   if (hits > spdHi) spdHi = hits;
   // Training bonds, and it scales with the session: a token effort is worth the
   // base, a full one is worth more. The daily cap in addBond() still stops it
@@ -1173,6 +1192,7 @@ uint8_t Pet::trainStrength(uint16_t hits) {
   int burn = (int)weight - hits / 3;  // tambien quema peso
   weight = burn > 0 ? burn : 0;
   joy = clamp100(joy + 6);
+  if (hits) enjoy(PC_TRAIN, 6);
   if (hits >= 20) heartUntil = millis() + HEART_MS;
   if (hits > strHi) strHi = hits;   // record de golpes
   // Training bonds, and it scales with the session: a token effort is worth the
@@ -1190,6 +1210,7 @@ void Pet::play() {
   if (ceremony != CER_NONE) return;
   if (isEgg() || sleeping) return;
   joy = clamp100(joy + 25);
+  enjoy(PC_PLAY, 25);
   energy = clamp100(energy - 10);
   fullness = clamp100(fullness - 5);
   heartUntil = millis() + HEART_MS;
@@ -1253,6 +1274,7 @@ void Pet::toggleLight() {
   if (ceremony != CER_NONE) return;
   if (isEgg()) return;
   sleeping = !sleeping;
+  if (sleeping) enjoy(PC_LIGHTS_OFF, 0);   // SLEEPY loves being tucked in
   // The player's hand beats the clock until morning: waking it at 23:00 must
   // not be undone a minute later by the auto-sleep, and neither must putting
   // it to bed early.
@@ -1265,6 +1287,7 @@ void Pet::clean() {
   poops = 0;
   hygiene = 100;
   addBond(1);
+  enjoy(PC_BATH, 0);   // TIDY: joy and bond
   registerCare();
   save();
   if (opened) gameEvent(EV_CLEAN);
@@ -1276,7 +1299,23 @@ void Pet::caress() {
   joy = clamp100(joy + 5);
   heartUntil = millis() + HEART_MS;
   addBond(1);
+  enjoy(PC_CARESS, 5);   // CUDDLY: +5 joy, +1 bond more
   registerCare();
+}
+
+// Every care path's one question to the personality (persona.cpp): applies
+// its extra joy and bond, and when this is the creature's FAVOURITE care,
+// shows the heart and the trait's cheer. Food is returned for the caller to
+// fold into its own number (only PICKY's plain berry uses it).
+PersonaEffect Pet::enjoy(uint8_t care, uint8_t baseJoy) {
+  PersonaEffect e = personaCare(persona, care, baseJoy);
+  if (e.joy) joy = clamp100(joy + e.joy);
+  if (e.bond) addBond(e.bond);
+  if (e.fav) {
+    heartUntil = millis() + HEART_MS;
+    if (opened) personaCheer(persona);
+  }
+  return e;
 }
 
 void Pet::eggTap() {
@@ -1353,6 +1392,7 @@ void Pet::save() {
   prefs.putUShort("qhi", spdHi);
   prefs.putString("nick", nick);
   prefs.putUChar("hitm", held);
+  prefs.putUChar("prsn", persona);
 }
 
 void Pet::load() {
@@ -1421,6 +1461,19 @@ void Pet::load() {
   prefs.getString("nick", nick, sizeof(nick));
   held = prefs.getUChar("hitm", ITEM_NONE);
   if (!itemIsHeld(held) || isEgg()) held = ITEM_NONE;   // absent on older saves
+  // The personality. A save from before personalities has no "prsn": its live
+  // creature rolls one NOW, once, and it is written straight away so a reboot
+  // before the next save cannot re-roll it. A key holding 0 is a real "none"
+  // (a revived creature banked before the feature) and is never re-rolled.
+  if (isEgg()) {
+    persona = PT_NONE;
+  } else if (!prefs.isKey("prsn")) {
+    persona = personaRoll();
+    prefs.putUChar("prsn", persona);
+  } else {
+    persona = prefs.getUChar("prsn", PT_NONE);
+    if (!personaValid(persona)) persona = PT_NONE;
+  }
   // Moves load last: relearnFromLevel() needs speciesId and ageMinutes, both of
   // which are read above. A save from before moves existed has no "mvs" key and
   // leaves the array zeroed, so an established pet is handed the moveset it
