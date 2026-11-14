@@ -29,6 +29,7 @@ extern bool battleOpen, btlWon, hubOpen, wildOpen;
 extern uint8_t btlKind, btlMsgCount;
 extern Combatant btlYou, btlFoe;
 void wildHubLabel(char *out, size_t n, const char *name);
+uint8_t wildAlertNow();
 #define BTL_CELL_X(i) (69 + ((i) % 2) * 168)
 #define BTL_CELL_Y(i) (286 + ((i) / 2) * 52)
 // the screen's rows: FEAT_ROW_Y(i) = 88 + 50 i, 44 tall (ui_hub.ino)
@@ -154,7 +155,8 @@ int main() {
   ck(!strcmp(lbl, "WILD 0/3"), "the hub row says 0/3");
   setDay(DAY0 + 21, 9);
   wildHubLabel(lbl, sizeof(lbl), "WILD");
-  ck(!strcmp(lbl, "WILD 3/3"), "and 3/3 the next day, before anything is written");
+  ck(!strncmp(lbl, "WILD 3/3", 8), "and 3/3 the next day, before anything is written");
+  ck((strstr(lbl, " !") != nullptr) == (wildAlertNow() != 0), "the hub row's \"!\" is the alert's answer");
 
   // ---- party AND box full: the ball is not consumed
   for (int i = 0; i < PARTY_SLOTS; i++) if (party.slots[i].empty()) { PartyMon m; m.dex = 19; m.level = 5; party.add(m); }

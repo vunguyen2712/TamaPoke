@@ -59,6 +59,37 @@ const SaveField SAVE_FIELDS[] = {
   { "dxrw", SK_U8 },    // Pokedex rewards granted: bit0 SHINY CHARM, bit1 OVAL CHARM
   { "dxgf", SK_U8 },    // how many every-25 dex gifts have been paid
   //
+  //
+  // ---- wild alerts and shiny chains (wild.cpp) -- keys go below this line
+  { "wchain", SK_BYTES },   // Wild::Chain: chained dex, length, best, day of the last link
+  //
+  //
+  // ---- trainer rank, titles, unlocks (rank.cpp) -- keys go below this line
+  //
+  { "rkTop", SK_U8 },   // highest trainer rank reached (shown; never goes down)
+  { "rkCat", SK_U16 },  // wild catches counted for the rank
+  { "rkChW", SK_U16 },  // weekly challenge wins counted for the rank
+  { "rkChL", SK_U16 },  // last challenge week counted, +1 (0 = none)
+  { "rkThm", SK_U8 },   // home scene theme (THEME_*)
+  { "rkAvG", SK_U8 },   // avatars kept although their rank is not reached (bitmask)
+  //
+  // ---- weekly gym challenge (challenge.cpp) -- keys go below this line
+  //
+  { "chal", SK_BYTES },    // this week's leader, rule, won flag, week, weeks cleared (12 B)
+  //
+  // ---- weather overlay and habitat view -- keys go below this line
+  //
+  //
+  // ---- personalities (persona.cpp) -- keys go below this line
+  { "prsn", SK_U8 },    // the live pet's trait (banked ones: PartyMon::spare)
+  //
+  //
+  // ---- two-board gifts and visits (friends.cpp) -- keys go below this line
+  { "frId", SK_U32 },    // this board's random friend id (minted by the first FRIENDS session)
+  { "frGday", SK_U32 },  // day of the last gift swap (0xFFFFFFFF = never)
+  { "frVday", SK_U32 },  // day of the last visit bonus
+  { "frJrn", SK_BYTES }, // the swap journal: one open exchange at most (18 B)
+  //
 };
 const uint16_t SAVE_FIELD_COUNT = sizeof(SAVE_FIELDS) / sizeof(SAVE_FIELDS[0]);
 

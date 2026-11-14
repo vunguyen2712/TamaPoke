@@ -32,7 +32,8 @@
 // whole handshake without a radio, and a deliberately lossy transport exercises
 // all of the above. Only the radio itself is unverifiable here.
 
-#define LINK_PROTO 2        // bump on ANY wire change; a mismatch is refused
+#define LINK_PROTO 3        // bump on ANY wire change; a mismatch is refused
+                            // 3: hello flags bit1 = friends mode, LM_FRIEND
 #define LINK_MAX_PAYLOAD 200
 #define LINK_NAME_LEN 12
 
@@ -43,6 +44,7 @@
 // The lossy test reproduces exactly that: with one frame in three dropped and a
 // fixed interval, one squad packet was destroyed on all ten attempts.
 #define LINK_JITTER_MS 200
+#define LINK_SQUAD_OWE 8               // see Link::squadOwe
 #define LINK_PAIR_TIMEOUT_MS 20000    // waiting for a peer that may not exist
 #define LINK_BATTLE_TIMEOUT_MS 12000  // mid-fight, where one is known to be there
 
@@ -80,7 +82,27 @@ enum LinkMsg : uint8_t {
   LM_END,
   LM_BYE,        // leaving on purpose, so the peer need not wait for a timeout
   LM_REMATCH,    // go again with the same squads
+  LM_FRIEND,     // friends mode: one side's whole state (friends.cpp), resent
 };
+
+// What a pairing is FOR. Carried in the hello and refused on a mismatch, so a
+// board on the FRIENDS screen can never pair into a battle (or the other way
+// round) and read the other's packets as its own.
+enum LinkMode : uint8_t { LINK_MODE_BATTLE = 0, LINK_MODE_FRIENDS = 1 };
+
+// Why a link was refused, so a screen can say which of the loud refusals it is.
+enum LinkWhy : uint8_t {
+  LINK_WHY_NONE = 0,
+  LINK_WHY_PROTO,     // a different protocol version
+  LINK_WHY_BUILD,     // same protocol, different tables (linkBuildTag)
+  LINK_WHY_SAMEID,    // two devices with the same id
+  LINK_WHY_MODE,      // one is on FRIENDS, the other on LAN BATTLE
+  LINK_WHY_RADIO,     // set by the UI: the radio did not come up
+};
+
+// A friends-mode state frame. friends.cpp owns the layout; the link only
+// carries the latest one (each supersedes the last, like a LinkResult).
+#define LINK_FRIEND_MAX 32
 
 // A creature on the wire. Deliberately not `Combatant` itself: that carries
 // live battle state (stages, ailments, timers) which only the host owns.
@@ -128,6 +150,14 @@ struct Link {
   uint8_t turn = 0;            // the exchange both sides are on
   uint8_t pendingAct = 0;      // host: the guest's action for `turn`, 0 = none
   bool youWon = false;
+  uint8_t mode = LINK_MODE_BATTLE;   // set after begin(), before start()
+  uint8_t refusedWhy = LINK_WHY_NONE;
+
+  // friends mode: the peer's latest state frame. Only the newest matters, so a
+  // single slot is right -- a skipped frame is superseded by the one after it.
+  uint8_t fx[LINK_FRIEND_MAX];
+  uint8_t fxN = 0;
+  bool fxNew = false;
 
   // guest: the last turn the host resolved. `resultNew` is cleared by whoever
   // renders it, so a dropped or duplicated frame cannot replay a turn twice.
@@ -144,6 +174,14 @@ struct Link {
   uint8_t resendSeq = 0;       // varies the resend interval, see LINK_JITTER_MS
   bool sawRx = false;          // onPacket has no clock; tick() stamps it
   bool armed = false;
+  // READY, but the peer is still saying hello: it is missing our squad. Our
+  // answer to its hello always sits at the same position after that hello, so
+  // a loss pattern that hits that position (one frame in two, say) would eat
+  // it every time. This many squad resends ride OUR timer instead, decoupled
+  // from its hellos; any non-hello traffic from the peer proves it is READY
+  // and stops them.
+  uint8_t squadOwe = 0;
+  uint8_t burst = 0;           // friends mode: alternates the resend burst length
 
   // set by whoever owns the radio; ctx lets a test route two Links to each other
   void (*send)(void *ctx, const uint8_t *buf, uint8_t len) = nullptr;
@@ -161,6 +199,9 @@ struct Link {
   void sendBye();                     // leaving deliberately
   void sendRematch();
   void rearm();                       // same squads, fresh fight
+  // friends mode: our whole state, KEPT and resent until the next one
+  // supersedes it. Only once READY; ignored in a battle.
+  void sendFriend(const uint8_t *frame, uint8_t len);
 
   bool ready() const { return state == LINK_READY; }
   bool live() const {

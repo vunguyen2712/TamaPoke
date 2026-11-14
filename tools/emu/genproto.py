@@ -22,5 +22,6 @@ open('proto.h','w').write(
     '#include "Arduino.h"\n#include "Arduino_GFX_Library.h"\n#include "sdmon.h"\n'
     '#include "species.h"\n#include "dex.h"\n#include "types.h"\n#include "party.h"\n'
     '#include "pet.h"\n#include "game_events.h"\n#include "items.h"\n#include "wild.h"\n'
-    '#include "tasks.h"\n#include "tower.h"\n#include "breed.h"\n\n' + "\n".join(protos) + "\n")
+    '#include "tasks.h"\n#include "tower.h"\n#include "breed.h"\n'
+    '#include "rank.h"\n#include "challenge.h"\n#include "persona.h"\n#include "friends.h"\n\n' + "\n".join(protos) + "\n")
 print(f"proto.h: {len(protos)} declarations")

@@ -3,7 +3,7 @@
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://dylanpdao.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v3.13-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v3.14-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
 [![Stars](https://img.shields.io/github/stars/DylanPDao/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/DylanPDao/TamaPoke/stargazers)
@@ -136,6 +136,12 @@ While **awake**, per minute:
 | HYG | −1 | **−4 more per poop** on screen (max 3 poops) |
 | JOY | −1 | **−2 extra** if FOOD < 30, **−2 extra** if HYG < 30 |
 
+- A creature's **personality** nudges these while it is **awake** (never asleep, never
+  while the board is off): GLUTTON FOOD −1 more every 4th minute; SLEEPY ENE −1 more
+  every 4th minute; PLAYFUL JOY −1 more every 4th minute; TIDY JOY −1 more **every
+  minute a poop is on screen**; ENERGETIC FOOD −1 more and ENE −1 *less* every 4th
+  minute; CUDDLY and PICKY unchanged. See [Personalities](#personalities).
+
 - ~**15 %/min** chance to poop (only if FOOD > 40). Poops tank hygiene fast.
 - **Care slip-up** = letting any stat hit **≤ 10** (60-min cooldown so it counts once).
   Each slip-up **delays evolution by 1 level** and cools the bond by 1.
@@ -152,7 +158,13 @@ While **awake**, per minute:
 - 🥊 **Training bag:** trains **STRENGTH** (~4 hits = 1 pt, cap +18/session), tires it.
 - 🫧 **Bath:** clears poops, HYG → 100.
 - 👆 **Pet it:** +5 JOY + bond.
-- 🌙 **Sleep:** rest — ENE **+6/min**, needs drain ~**4× slower** with floors
+- **Personality bonuses** on top of the above (see [Personalities](#personalities)):
+  GLUTTON +6 JOY from any berry or candy · PICKY +10 JOY +2 bond from its favourite
+  berry, but other berries give only **+20 FOOD** · PLAYFUL doubles the ball game's JOY ·
+  ENERGETIC +8 JOY +1 bond per training session · TIDY +10 JOY +2 bond from a bath ·
+  CUDDLY +5 JOY +1 bond more from petting (+10 / +2) · SLEEPY +8 JOY when you put it to
+  bed with the light.
+- 🌙 **Sleep:** rest — ENE **+6/min** (**+8** for a SLEEPY creature), needs drain ~**4× slower** with floors
   (FOOD 30 / JOY 35 / HYG 45). No poops, no slip-ups, can't run away while asleep.
   **Screen off + between midnight and 06:00 puts it to sleep**, and it stays
   asleep until you turn the screen back on -- it wakes when *you* do, not at a
@@ -589,6 +601,238 @@ region's *obtainable* dex -- the species that can actually be registered on your
 card (has art, its pack is present, hatches or evolves from something that can).
 The SHINY CHARM halves the egg's shiny roll: 1/48 -> 1/24, and the best case
 1/8 -> 1/4.
+
+#### Wild alerts and shiny chains
+
+**The "!" on the main screen.** A pulsing red circle with a "!" (gold when it
+is a shiny) appears left of the pet, above the bars, when the **next** wild
+encounter waiting today is worth a look. Tapping it opens WILD on exactly that
+creature -- the alert peeks at the same deterministic roll the WILD screen
+makes, and spends nothing. The hub's WILD row shows `!` at the same time.
+
+| The next encounter is... | Alert |
+|---|---|
+| a **rare** species (a rare base form, or an evolved form of a rare line) | yes |
+| a **shiny** | yes (gold) |
+| a species only possible in **some** weather or time window (GHOST types: night or fog) | yes |
+| **missing from your Pokedex** | yes |
+| none of these, or already beaten and waiting for a ball | no |
+
+Hidden when no encounters are left today, while the live creature is an egg
+or mid-farewell, and when the clock has never been set.
+
+**Shiny chains.** Beating the same species again in the wild extends a chain;
+the WILD screen shows it (`CHAIN: ZUBAT x4`).
+
+| Rule | Number |
+|---|---|
+| A wild win against the chained species | **+1** link (counts up to 99) |
+| A wild win against a different species | the chain **restarts at 1** on that species |
+| A whole day with no wild win in between (last link on day D, nothing on D+1) | **broken** |
+| Losing a fight, running, letting one go, catching it | no effect |
+| Spawn boost while the chain is alive | the chained species weighs **as much as every other eligible species together** -- **half** of each roll, whenever it can appear (its region, level and time rules still apply) |
+| Shiny odds of the chained species | **(1 + links)/256**, capped at **1/16** (15 links); the SHINY CHARM doubles it (up to **1/8**) |
+| Shiny odds of everything else | unchanged: 1/256, 1/128 with the charm |
+
+A shiny wild creature is shiny in the battle too. To keep a chain, fight the
+chained species and RUN from the others. Design notes:
+[`docs/adventure-wild-chain.md`](docs/adventure-wild-chain.md).
+
+&nbsp;
+
+#### Trainer rank and titles
+
+One trainer rank, built from progress you already have. It is shown on the last
+page of the player card (swipe down from the pet, then left past the medals):
+your title, the rank number and a bar to the next rank.
+
+| progress | points |
+|---|---|
+| each badge won on easy (any region, gyms, Elite 4 and champion) | 10 |
+| each badge won on hard (on top of the easy one) | 10 |
+| each gym rematch trainer beaten | 10 |
+| each species registered in the Pokedex | 2 |
+| each floor of your best Battle Tower streak (up to 100) | 5 |
+| each wild catch (up to 250) | 2 |
+| each weekly gym challenge cleared (up to 50; one per week) | 30 |
+
+| rank | title | points |
+|---|---|---|
+| 1 | ROOKIE | 0 |
+| 2 | TRAINER | 30 |
+| 3 | ACE TRAINER | 100 |
+| 4 | GYM CHALLENGER | 200 |
+| 5 | GYM LEADER | 350 |
+| 6 | VETERAN | 600 |
+| 7 | ELITE | 1000 |
+| 8 | CHAMPION | 1600 |
+| 9 | MASTER | 2500 |
+| 10 | LEGEND | 4000 |
+
+The rank shown **never goes down**: the highest one reached is kept, even if the
+points behind it later fall (a tower run that ends does not touch your BEST, but
+nothing can take a rank away either way). Catches and challenge wins are counted
+from the moment this feature is installed. On a rank-up the pet's screen shows
+RANK UP! and the new title for 4 seconds, the next time it is on screen
+(after any MEDAL! popup, which sits in the same place). A save
+from before ranks starts at the rank its progress already earns.
+
+Unlocks, on the rank page:
+
+- **Avatars.** RED, BLUE and GIRL are open from the start; YOUNGSTER at rank 2,
+  ACE M and ACE F at rank 4, HIKER at rank 6, SAILOR at rank 8. Locked ones are
+  greyed with the rank they need (R4 ...) and cannot be picked; tapping the
+  avatar on the first page skips them. An avatar you were already wearing
+  before ranks existed stays yours.
+- **Home scenes.** CLASSIC always; SUNSET at rank 3 (a violet-to-orange
+  daytime sky), STARRY at rank 5 (night sky, moon and twinkling stars at any
+  hour), FESTIVAL at rank 7 (bunting across the sky). Tap one to use it.
+
+&nbsp;
+
+#### Weekly gym challenge
+
+ADVENTURE -> page 2 -> **CHALLENGE**. Locked (greyed, reading CHALLENGE: WIN A
+BADGE) until you hold at least one gym badge, in any region, on either
+difficulty.
+
+- **One a week.** Weeks start on **Monday**, the same weeks the weekly tasks
+  use. The week's leader and rule are drawn the first time you look that week
+  and then stay put until Monday.
+- **The leader** is one of the eight gym leaders (never the Elite 4 or a
+  champion) from a region whose sprite pack is on the card, and only a leader
+  you have reached on that ladder: the first, or one whose predecessor you have
+  beaten. If the leader's pack later leaves the card, the week is re-drawn
+  (a cleared week stays cleared).
+- **The rule** rotates with the week through this table, skipping a rule you
+  could not meet:
+
+  | rule | you bring | the leader brings |
+  |---|---|---|
+  | TYPE ONLY: X | 1-6, every one of type X (either of its two types) | the real team |
+  | LEVEL CAP N | 1-6, each fighting at level N at most | the real team, every member AT level N |
+  | SOLO | exactly 1 | its ace alone (highest level) |
+  | NO HELD ITEMS | 1-6; held items do nothing and are never spent | the real team |
+  | TRIO | exactly 3 | its last three (fewer if it has fewer) |
+
+  X is always a type one of your creatures had when the week was drawn, and
+  TRIO is only drawn if you had three creatures. N is the leader's best level
+  minus a quarter (rounded down), never below 5: KOGA (best 43) is LEVEL CAP 33.
+  Outside LEVEL CAP your creatures are capped to the leader's best level, as in
+  the gyms. The leader's IVs are **20**, with the easy AI.
+- **The picker** opens in challenge mode and offers only creatures the rule
+  allows; FIGHT stays grey until the squad is legal, and the fight refuses to
+  start with one that is not. Level caps and NO HELD ITEMS apply to the
+  fighting copies only: nothing stored changes.
+- **Reward, once a week**: **3 ULTRA BALL + one held item**, rotating by week
+  through LEFTOVERS, FOCUS SASH, QUICK CLAW, SITRUS BERRY, LUM BERRY. The row
+  then reads DONE until Monday. A loss or a RUN costs nothing: retry as often as
+  you like that week. No badge and no training are ever awarded by it.
+
+&nbsp;
+
+#### Weather on the main screen and the habitat view
+
+**Weather on the main screen.** Today's weather (the same one the WILD screen
+shows) is drawn over the pet's scene, behind the header, the pet and the
+buttons, and animates continuously:
+
+| Weather | Drawn as | Night |
+|---|---|---|
+| CLEAR | nothing (the scene's own clouds) | nothing |
+| SUNNY | a halo and **12** slowly turning rays round the sun, and a 3-ring lens flare by day | nothing: a sunny night is a clear sky |
+| RAIN | up to **96** slanted streaks and **8** splashes on the ground | darker streaks |
+| SNOW | up to **64** flakes (2 or 3 px) drifting and swaying | greyer flakes |
+| FOG | **5** drifting bands of 10 lines each, below the header | dark bands |
+| WIND | up to **28** fast streaks and **6** tumbling leaves | dim streaks |
+
+No weather is drawn with **no clock set**, over the **egg**, or during a
+farewell / runaway ceremony. Particles keep off the name and status lines and
+off the bottom panel. A frame costs at most **120** drawing calls (measured
+worst: about 65, in rain).
+
+**The habitat view.** In the POKEDEX grid, the **HABITAT** pill (bottom right,
+beside the page number) lists the species of that region still **missing** from
+your Pokedex, **5 a page**, in dex order. Each row is `N.### ???` with its
+silhouette -- names stay hidden, exactly as in the grid -- and one line:
+
+| Line | Means |
+|---|---|
+| `RAIN, MORNING` | the weather and time window where it is most likely (a second one is shown when it comes within 90% of the best: `SNOW/CLEAR, EVENING`) |
+| `NIGHT/FOG ONLY` | it never appears outside those (GHOST types: night, or fog by day) |
+| `Lv.16+` | an evolved form: the lowest wild level it appears at (its predecessor's evolution level) |
+| `EGG ONLY` | never wild: the legendaries |
+| `EVOLVE ONLY` | never wild: evolution-only forms with no level to gate on (stone and second-branch evolutions) |
+| `NOT ON THIS CARD` | no art, or its region's sprite pack is missing |
+
+"Most likely" is the species' **share** of the region's wild spawns in each
+weather and window (counted with every wild form in, as at level 100), so a
+NORMAL type that keeps its weight in the rain still drops while the WATER types
+around it triple. It is a hint for your egg region; on **ALL** the pool is
+wider and the odds are thinner. Tap a row for the species' detail page, which
+also shows these lines (for every species, caught or not). A horizontal swipe
+pages, and past either end returns to the grid; a vertical swipe changes region;
+BACK returns to the grid. A region without its pack shows the page with
+**NEEDS PACK** -- locked, not hidden -- and a finished region says
+**COMPLETE!**
+
+&nbsp;
+
+#### Personalities
+
+Every creature rolls **one personality when it hatches** (seven, equally likely) and
+keeps it for life. It decides which care it **loves**: give it that and it gets extra
+joy (sometimes bond), the heart, and a pink **"<3 TRAIT!"** cheer on the main screen
+for 2.5 s. It also nudges its needs a little -- **only while awake**.
+
+| Trait | Loves | Bonus when it gets it | Its needs, awake |
+|---|---|---|---|
+| GLUTTON | food | **+6 JOY** from any berry or candy | FOOD −1 more every 4th minute (−2.25/min) |
+| SLEEPY | bedtime | **+8 JOY** when put to bed with the light | ENE −1 more every 4th minute; asleep ENE **+8/min** instead of +6 |
+| PLAYFUL | play | the ball game's JOY **doubled** | JOY −1 more every 4th minute |
+| TIDY | baths | **+10 JOY, +2 bond** from a bath | JOY −1 more every minute a poop is on screen |
+| CUDDLY | cuddles | petting gives **+10 JOY, +2 bond** (normally +5 / +1) | unchanged |
+| ENERGETIC | training | **+8 JOY, +1 bond** per bag or reaction session with a hit | FOOD −1 more, ENE −1 **less**, every 4th minute |
+| PICKY | its berry | favourite berry **+20 JOY, +4 bond** in all (normally +10 / +2) | unchanged -- but any other berry gives **+20 FOOD**, not +25 |
+
+- **The night is never harder.** Asleep, and while the board is switched off, a
+  personality changes nothing except SLEEPY's faster energy refill, so the sleep floors
+  (FOOD 30 / JOY 35 / HYG 45) and the offline floor (15) are exactly what they were.
+- Bond bonuses count toward the usual **+20/day** cap.
+- Shown on the creature card's first page ("GLUTTON: loves food") and, for banked
+  creatures, next to the typing on the party / box sheet. It is kept when the creature
+  joins the party or box and comes back with it if you bring it back.
+- **Eggs** have none until they hatch (daycare eggs too). A save from before this
+  version gives its current creature a personality **once**, the first time it loads.
+  Creatures already in the party or box from before have **none** and keep having none;
+  so does a wild catch, which never hatched.
+
+&nbsp;
+
+#### Two-board gifts and visits
+
+ADVENTURE > FRIENDS (hub page 2). Two boards pair exactly like a LAN battle --
+one taps HOST, the other JOIN (two HOSTs or two JOINs also work: the higher
+device id hosts) -- over the same ESP-NOW link, version check and build
+fingerprint. A board on FRIENDS and a board on LAN BATTLE refuse each other
+("FRIEND IS ON LAN"); different builds refuse with "DIFFERENT VERSION". A friend
+that goes quiet for 12 s, or leaves, ends the session with "YOUR FRIEND LEFT".
+
+Once paired each side sees the friend's trainer name and creature, and can:
+
+| | rule |
+|---|---|
+| **GIFT SWAP** | Each side offers ONE item from its own bag (any item except key items; tap the item row to cycle, then OFFER). Both receive the other's. A board with no giftable item offers a **small gift** instead -- a POKE BALL or an ORAN BERRY, made fresh, so nothing leaves its bag. |
+| | **Once a day per board** (the care-streak day). A swap that is called off -- an invalid item, a bag already holding 99 of what would arrive -- does not use up the day. |
+| | Items only change hands when BOTH boards have agreed. If the link breaks at the exact moment of the swap, the board left unsure keeps the gift aside ("GIFT IN TRANSIT", a `*` on the hub row) and it settles by itself the next time those two boards pair: either it arrives or it comes back. Until then that board cannot swap with anyone else (visits still work). A lost packet never copies or destroys an item. |
+| **VISIT** | Either side taps VISIT and both screens show the two creatures side by side for 5 s (name, level, `*` = shiny). Both pets must be hatched. The first visit each day gives **+15 joy and +3 bond** to each pet; the bond still counts against the normal daily bond cap of 20. Further visits that day are just for show. |
+
+Events for tasks: GIFT SENT and GIFT RECEIVED when a swap completes on that
+board; VISIT (the friend's species) when a visit pays its daily bonus.
+
+Design and the swap protocol: `docs/adventure-friends.md`.
+
+&nbsp;
 
 ## Hardware
 

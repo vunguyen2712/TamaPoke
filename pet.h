@@ -4,6 +4,7 @@
 #include "dex.h"
 #include "trainers.h"   // GYM_REGIONS sizes the badge masks
 #include "party.h"
+#include "persona.h"   // PersonaEffect, the PT_* traits
 
 // 1 tick = 1 minuto de juego. Baja este valor para probar mas rapido
 // (p. ej. 5000UL = las estadisticas caen 12x mas rapido).
@@ -184,6 +185,10 @@ public:
   // tasks), which is private; the one definition of a day stays today(), so a
   // feature's "once a day" and the care streak can never disagree.
   uint32_t currentDay() const { return today(); }
+  // A two-board visit (friends.cpp): joy, and the bond through addBond() so
+  // the daily bond cap applies exactly as it does to playing. An egg gains
+  // nothing. Returns the bond actually gained (0 once the cap is reached).
+  uint8_t friendVisit(uint8_t joyGain, uint8_t bondGain);
   // The level at which `dex` may legally use learnset entry `i`. A level-up
   // move carries its own; a level-0 entry is a TM/tutor/egg move, which the
   // data gives no level at all, and those unlock together at TM_LEVEL.
@@ -210,6 +215,10 @@ public:
   // reviveFrom(), and a creature that ends without being banked hands it back
   // to the bag. Saved under "hitm".
   uint8_t held = 0;
+  // Its personality (PT_*, persona.h; 0 = none). PER-CREATURE like `held`:
+  // rolled once in hatch(), banked in PartyMon::spare by snapshotForParty(),
+  // back with reviveFrom(). Saved under "prsn". Eggs have none.
+  uint8_t persona = 0;
 
   // The player's own name, alongside the badges and the streak: it belongs to
   // whoever is playing, not to the creature, so newEgg() must never clear it.
@@ -484,6 +493,8 @@ private:
   uint32_t milestoneUntil = 0; // celebracion de hito de racha
 
   void registerCare();   // primer cuidado del dia: racha + vinculo
+  PersonaEffect enjoy(uint8_t care, uint8_t baseJoy);  // the personality's say in one act of care
+  uint8_t nudgeTick = 0;   // awake minutes, for the personality's every-4th-minute nudge
   void addBond(uint8_t amt);
   uint8_t rollIV(int bonus) const;  // una tirada 8-31 empujada por el cuidado
   // los 4, con las garantias de legendario/shiny. `inherited` (a daycare egg):

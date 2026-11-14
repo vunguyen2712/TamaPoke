@@ -3,6 +3,7 @@
 #include <string.h>
 #include "dex.h"
 #include "items.h"   // itemIsHeld(): a stored held id is checked like a dex number
+#include "persona.h" // personaValid(): spare carries the personality
 #include <stddef.h>
 
 Party party;
@@ -12,7 +13,7 @@ static void sanitize(PartyMon &s) {
   if (s.dex < 1 || s.dex > DEX_COUNT) s = PartyMon();
   s.nick[sizeof(s.nick) - 1] = 0;
   if (!itemIsHeld(s.held)) s.held = 0;   // an unknown or non-holdable id
-  s.spare = 0;
+  if (!personaValid(s.spare)) s.spare = 0;   // the personality (persona.h); 0 = none
 }
 
 // Same NVS namespace as the pet on purpose: WIPE (Pet::factoryReset) calls

@@ -39,10 +39,14 @@
 #include "tasks.h"
 #include "tower.h"
 #include "breed.h"
+#include "rank.h"
+#include "challenge.h"
+#include "persona.h"
+#include "friends.h"
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "3.13"
+#define FW_VERSION "3.14"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -121,7 +125,16 @@ bool tasksOpen = false;
 bool towerOpen = false;
 bool daycareOpen = false;
 bool bagOpen = false;
+bool challengeOpen = false;
+bool friendsOpen = false;
 uint8_t hubPage = 0;   // one page today; a seventh row pages instead of shrinking
+// Shared look of every Adventure screen (helpers in ui_hub.ino).
+#define FEAT_ROW_X 70
+#define FEAT_ROW_W 326
+#define FEAT_ROW_H 44
+#define FEAT_ROW_Y(i) (88 + (i) * 50)
+#define FEAT_BACK_Y 392      // the BACK pill at the bottom of every feature screen
+#define FEAT_BACK_H 40
 #define MENU_X 73
 // Four rows: PARTY and GYMS came out, since a swipe right and a swipe left now
 // reach them directly. Sized to the bezel -- the panel is 320 wide, so 160 from
@@ -230,6 +243,8 @@ enum : uint8_t {
   SCR_GAME,
   // the Adventure hub and the screens it leads to (ui_*.ino)
   SCR_HUB, SCR_WILD, SCR_TASKS, SCR_TOWER, SCR_DAYCARE, SCR_BAG,
+  SCR_CHALLENGE, SCR_FRIENDS,
+  SCR_HABITAT,   // the Pokedex habitat list (ui_habitat.ino), a sub-screen of the gallery
   SCR_MAIN, SCR_COUNT
 };
 extern const char *const SCREEN_NAME[SCR_COUNT];   // const is internal linkage in C++
@@ -256,6 +271,8 @@ const char *const SCREEN_NAME[SCR_COUNT] = {
   "lan", "pick", "battle", "win", "learn", "train", "menu",
   "minigame",
   "hub", "wild", "tasks", "tower", "daycare", "bag",
+  "challenge", "friends",
+  "habitat",
   "main"
 };
 
@@ -436,7 +453,7 @@ uint8_t btlRegion = 0;
 // What kind of fight is running, so the end of a battle can be routed to the
 // feature that started it (featBattleEnded in ui_hub.ino). Set by every
 // start*Battle(); a feature that starts its own fight sets it straight after.
-enum : uint8_t { BK_DEBUG = 0, BK_GYM, BK_LAN, BK_WILD, BK_TOWER, BK_REMATCH };
+enum : uint8_t { BK_DEBUG = 0, BK_GYM, BK_LAN, BK_WILD, BK_TOWER, BK_REMATCH, BK_CHALLENGE };
 uint8_t btlKind = BK_DEBUG;
 #define TRAINERS (TRAINER_SETS[gymRegion % GYM_REGIONS].list)
 #define BTL_TRAINERS (TRAINER_SETS[btlRegion % GYM_REGIONS].list)
@@ -460,6 +477,8 @@ bool pickOpen = false;
 #define PICK_LAN 0xFF
 // The tower's 3 vs 3 at level 50 (ui_tower.ino). Also not a trainer index.
 #define PICK_TOWER 0xFE
+// The weekly gym challenge (ui_challenge.ino): only the creatures its rule allows.
+#define PICK_CHALLENGE 0xFD
 static void lanOffer(bool host);
 uint8_t pickTrainer = 0;
 bool pickHard = false;
@@ -484,7 +503,9 @@ bool playerOpen = false;
 // one page, and the page you are on IS the region -- no extra control needed,
 // and horizontal paging already works everywhere else.
 uint8_t playerPage = 0;
-#define PLAYER_PAGES (GYM_REGIONS + 1)
+// ... and last, the trainer rank page (ui_rank.ino).
+#define PLAYER_PAGES (GYM_REGIONS + 2)
+#define PLAYER_RANK_PAGE (GYM_REGIONS + 1)
 #define playerBadgeRegion (playerPage % GYM_REGIONS)
 uint8_t gymPage = 0;
 #define GYM_ROWS 5
@@ -736,6 +757,10 @@ void setup() {
   tasksBegin(pet);
   towerBegin();
   breedBegin();
+  rankBegin();
+  challengeBegin();
+  personaBegin();
+  friendsBegin();
   sdBegin();
   thumbs.load();
 
@@ -785,6 +810,7 @@ void loop() {
     linkNowPoll();
     lan.tick(now);
   }
+  friendsLoop(now);   // a FRIENDS session settles gifts/visits here (ui_friends.ino)
 
   // avisa con un sonido cuando el bicho pasa a estar listo para evolucionar
   // (incluye el caso de cumplir al despertar). canEvolveNow es false durmiendo.
@@ -1274,6 +1300,7 @@ void onSwipeV(int dir) {
   if (spdOpen) { leaveSpeed(); return; }
   if (galleryOpen) {
     if (galleryDetail) { galleryDetail = 0; galleryPmd.unload(); galleryDirty = true; return; }
+    if (habitatShown()) { habitatSwipeV(dir); return; }   // ui_habitat.ino
     galleryRegion = (uint8_t)((galleryRegion + (dir > 0 ? 1 : GAL_REGIONS - 1)) % GAL_REGIONS);
     galleryPage = 0;
     galleryDirty = true;
@@ -1318,10 +1345,7 @@ void renderMonSheet(const PartyMon &m, bool fromBox) {
   char ty[24];
   if (d.type2 == T_NONE) snprintf(ty, sizeof(ty), "%s", typeName(d.type1));
   else snprintf(ty, sizeof(ty), "%s/%s", typeName(d.type1), typeName(d.type2));
-  gfx->setTextColor(UI_TRACK);
-  gfx->setTextSize(1);
-  gfx->setCursor(CX - (int)strlen(ty) * 3, 64);
-  gfx->print(ty);
+  personaTypeLine(ty, m.spare, 64);   // typing + personality (ui_persona.ino)
 
   for (int i = 0; i < MOVE_SLOTS; i++)
     drawMoveRow(78 + i * 52, m.moves[i], false, m.dex);
@@ -1684,6 +1708,7 @@ void onSwipe(int dir) {
     galleryDirty = true;
     return;
   }
+  if (habitatShown()) { habitatSwipe(dir); return; }   // pages; past the ends, back to the grid
   int np = galleryPage - dir;  // deslizar a la izquierda avanza pagina
   if (np < 0) {                // back past the first page = the region chooser
     galleryPick = true;
@@ -1731,11 +1756,12 @@ void onTap(int16_t x, int16_t y) {
     }
     // the avatar is the only other live target; everything else backs out
     if (playerPage == 0 && x > CX - 40 && x < CX + 40 && y > 70 && y < 146) {
-      pet.avatar = (uint8_t)((pet.avatar + 1) % AVATAR_COUNT);
+      pet.avatar = rankNextAvatar(pet.avatar);   // skips the ones the rank has not unlocked
       pet.flushSave();
       sfxPlay(SFX_TAP);
       return;
     }
+    if (playerPage == PLAYER_RANK_PAGE && rankPageTap(x, y)) return;   // an avatar or a theme
     playerOpen = false;
     return;
   }
@@ -1901,6 +1927,7 @@ void onTap(int16_t x, int16_t y) {
       }
       return;
     }
+    if (habitatShown()) { habitatTap(x, y); return; }   // ui_habitat.ino
     galleryTap(x, y);
     return;
   }
@@ -2014,6 +2041,7 @@ void onTap(int16_t x, int16_t y) {
       return;
     }
   }
+  if (featMainTap(x, y)) return;   // a feature's badge on the main screen
   // tapping the name/status band opens the menu. This band was inert before,
   // and it sits clear of inPetZone (which starts at y 95).
   if (y >= 28 && y < 94) {
@@ -2073,12 +2101,14 @@ void drawClouds(uint32_t now, uint16_t col) {
 }
 
 void drawScene(uint8_t biome, uint32_t now, bool night) {
+  night = rankSceneNight(night);   // the player's scene theme (ui_rank.ino)
   int h = sceneHour();
   uint16_t top, bot;
   if (night)            { top = C565(0x0c, 0x12, 0x24); bot = C565(0x1e, 0x26, 0x46); }
   else if (h < 8)       { top = C565(0xd1, 0x6a, 0x86); bot = C565(0xf3, 0xb8, 0x7c); }  // amanecer
   else if (h < 18)      { top = C565(0x8f, 0xc8, 0xea); bot = C565(0xdc, 0xee, 0xe6); }  // dia
   else                  { top = C565(0xc7, 0x5a, 0x4a); bot = C565(0xf0, 0xae, 0x64); }  // atardecer
+  rankSceneSky(top, bot, night);
 
   // cielo en bandas
   for (int y = 0; y < HORIZON; y += 8)
@@ -2142,6 +2172,7 @@ void drawScene(uint8_t biome, uint32_t now, bool night) {
       for (int b = -1; b <= 1; b++)
         gfx->fillRect(gx + b * 5, HORIZON + 6, 2, 8 + (b == 0 ? 4 : 0), dk);
   }
+  rankSceneExtras(now, night);
 }
 
 // primera partida: elige inicial entre Bulbasaur / Charmander / Squirtle
@@ -2188,7 +2219,10 @@ RTC_NOINIT_ATTR uint32_t gCrumbHeap;
 // Which screen is on the panel RIGHT NOW, in the same order render() tests.
 uint8_t uiCurrentScreen() {
   if (pet.awaitingStarter()) return starterRegionDone ? SCR_STARTER : SCR_REGION;
-  if (galleryOpen) return galleryPick ? SCR_DEXPICK : SCR_GALLERY;
+  // asked every frame, open or not: it also drops a habitat page left behind
+  // when the Pokedex closed, so re-opening it never lands there (ui_habitat.ino)
+  bool habitat = habitatShown();
+  if (galleryOpen) return galleryPick ? SCR_DEXPICK : (habitat ? SCR_HABITAT : SCR_GALLERY);
   if (movePickOpen) return SCR_MOVEPICK;
   if (partyOpen) return boxOpen ? SCR_BOX : SCR_PARTY;
   if (kbOpen) return SCR_KEYBOARD;
@@ -2256,6 +2290,7 @@ void render() {
   }
   if (galleryOpen) {
     if (galleryPick) { renderRegionPick(RPICK_FOR_DEX); return; }
+    if (habitatShown()) { renderHabitat(); return; }
     renderGallery();
     return;
   }
@@ -2334,6 +2369,7 @@ void render() {
   // drawScene cubre los 466x466 completos: sin fillScreen(NEGRO) previo para
   // que un flush DMA solapado nunca capture negro a medias (anti-parpadeo)
   drawScene(pet.isEgg() ? 0 : DEX_TBL[pet.speciesId].biome, millis(), gNight);
+  featSceneOverlay();   // the weather, under the header/pet/buttons (ui_hub.ino)
 
   if (pet.ceremony) {
     const DexEntry &d = DEX_TBL[pet.speciesId];
@@ -2461,6 +2497,7 @@ void render() {
   }
 
   drawTasksNotice();   // "TASK DONE", for a moment after one completes
+  featMainOverlay();   // feature badges on the pet's screen (ui_hub.ino)
 
   if (menuOpen) drawMenu();
 
@@ -3100,9 +3137,10 @@ void renderCardProfile() {
   gfx->setTextSize(2);
   gfx->setCursor(CX - strlen(info) * 6, 296);
   gfx->print(info);
+  personaCardLine(318);   // its personality (ui_persona.ino)
 
   gfx->setTextColor(UI_TRACK);
-  gfx->setCursor(CX - strlen(T(S_RENAME_HINT)) * 6, 332);
+  gfx->setCursor(CX - strlen(T(S_RENAME_HINT)) * 6, 342);
   gfx->print(T(S_RENAME_HINT));
 }
 
@@ -3427,6 +3465,7 @@ static void buildSquad(uint8_t maxLvl, uint8_t maxCount, uint16_t mask, uint8_t 
 // How many you may bring: the leader's own count in hard mode, six otherwise.
 uint8_t squadCap(uint8_t idx, bool hard) {
   if (idx == PICK_TOWER) return TOWER_TEAM;
+  if (idx == PICK_CHALLENGE) return challengePickCap();
   if (idx >= TRAINER_COUNT) return TRAINER_TEAM_MAX;
   return hard ? TRAINERS[idx].count : TRAINER_TEAM_MAX;
 }
@@ -4391,6 +4430,7 @@ void renderPlayer() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
   if (playerPage < GYM_REGIONS) renderPlayerBadges();
+  else if (playerPage == PLAYER_RANK_PAGE) rankRenderPage();
   else renderPlayerMedals();
 
   for (uint8_t i = 0; i < PLAYER_PAGES; i++) {
@@ -4536,6 +4576,8 @@ void renderSpeed() {
 
 // candidate n: 0 = the live pet, 1..PARTY_SLOTS = banked members
 bool pickExists(uint8_t n) {
+  // the weekly challenge offers only what its rule allows (ui_challenge.ino)
+  if (pickTrainer == PICK_CHALLENGE && !challengePickAllows(n)) return false;
   if (n == 0) return !pet.isEgg();
   return n <= PARTY_SLOTS && !party.slots[n - 1].empty();
 }
@@ -4614,6 +4656,8 @@ void renderPick() {
              lanWantHost ? T(S_LAN_HOST) : T(S_LAN_JOIN));
   } else if (pickTrainer == PICK_TOWER || pickRematch) {
     top = pickFoeHeader(head, sizeof(head));   // ui_tower.ino
+  } else if (pickTrainer == PICK_CHALLENGE) {
+    top = challengePickHeader(head, sizeof(head));   // ui_challenge.ino
   } else {
     const Trainer &t = TRAINERS[pickTrainer];
     for (int k = 0; k < t.count; k++)
@@ -4647,7 +4691,8 @@ void renderPick() {
     else gfx->drawCircle(dx, 332, 4, UI_INK);
   }
 
-  bool ok = pickChosen() > 0 && pickChosen() <= cap;
+  bool ok = pickChosen() > 0 && pickChosen() <= cap &&
+            (pickTrainer != PICK_CHALLENGE || challengePickOk());
   gfx->fillRoundRect(PICK_BACK_X, PICK_GO_Y, PICK_BTN_W, PICK_BTN_H, 12, UI_TRACK);
   gfx->drawRoundRect(PICK_BACK_X, PICK_GO_Y, PICK_BTN_W, PICK_BTN_H, 12, UI_INK);
   gfx->setTextColor(UI_INK);
@@ -4672,7 +4717,7 @@ void pickTap(int16_t x, int16_t y) {
     sfxPlay(SFX_TAP);
     pickOpen = false;
     if (pickTrainer == PICK_LAN) { lanOpen = true; }
-    else if (pickTrainer == PICK_TOWER) { /* the tower screen is still up */ }
+    else if (pickTrainer == PICK_TOWER || pickTrainer == PICK_CHALLENGE) { /* its screen is still up */ }
     else { gymOpen = true; }
     return;
   }
@@ -4680,6 +4725,7 @@ void pickTap(int16_t x, int16_t y) {
       x >= PICK_GO_X && x <= PICK_GO_X + PICK_BTN_W) {
     uint8_t cap = squadCap(pickTrainer, pickHard);
     if (pickChosen() == 0 || pickChosen() > cap) return;   // GO stays inert
+    if (pickTrainer == PICK_CHALLENGE && !challengePickOk()) { sfxPlay(SFX_DENY); return; }
     sfxPlay(SFX_TAP);
     pickOpen = false;
     if (pickTrainer == PICK_LAN) {
@@ -4692,6 +4738,7 @@ void pickTap(int16_t x, int16_t y) {
       return;
     }
     if (pickTrainer == PICK_TOWER) { towerPickFight(); return; }   // ui_tower.ino
+    if (pickTrainer == PICK_CHALLENGE) { challengePickFight(); return; }   // ui_challenge.ino
     if (pickRematch) { rematchStartBattle(pickTrainer); return; }
     startTrainerBattle(pickTrainer, pickHard);
     return;
@@ -5734,6 +5781,7 @@ void renderGallery() {
       const uint8_t *t = thumbs.get(galleryDetail);
       if (t) drawThumb(t, CX - GAL_CELL, 135, 4, !reg);
     }
+    drawHabitatDetail(galleryDetail);   // where and when it turns up (ui_habitat.ino)
     gfx->setTextColor(UI_INK);
     gfx->setTextSize(2);
     gfx->setCursor(CX - strlen(T(S_DETAIL_BACK)) * 6, 408);
@@ -5789,8 +5837,10 @@ void renderGallery() {
   snprintf(pg, sizeof(pg), "%d/%d", galleryPage + 1, (int)GAL_PAGES);
   gfx->setTextColor(UI_TRACK);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - (int)strlen(pg) * 6, 428);
+  // left of centre, to make room for the HABITAT pill (ui_habitat.ino)
+  gfx->setCursor(160 - (int)strlen(pg) * 6, 428);
   gfx->print(pg);
+  drawGalleryHabitatBtn();
   gfx->flush();
 }
 
@@ -5806,6 +5856,7 @@ void galleryTap(int16_t x, int16_t y) {
     galleryPmd.unload();
     return;
   }
+  if (galleryHabitatBtnHit(x, y)) { sfxPlay(SFX_TAP); habitatOpenFromGallery(); return; }
   int c = (x - GAL_X) / GAL_CELL, r = (y - GAL_Y) / GAL_CELL;
   if (c < 0 || c > 3 || r < 0 || r > 3) return;
   int16_t dex = GAL_LO + galleryPage * GAL_PER_PAGE + r * 4 + c;
