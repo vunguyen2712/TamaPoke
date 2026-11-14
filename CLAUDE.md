@@ -269,7 +269,6 @@ ONE timeline: it schedules the lunge, the flinch (`btlHitFrom`/`btlHitUntil`), t
 HP-bar hold (`btlHpHoldUntil`) and returns when the next action may start.
 Faints and the win screen (`btlWinFrom`) wait for `btlFxEnd()`. Any new place that
 deals damage in a fight must go through it, or its hit lands before its effect.
-`genproto.py` includes `battle.h` because `btlFxQueue` takes a `TurnLog`.
 `movefx_ui_test` covers it.
 
 `tests/run.sh` no longer needs SDL (only the clickable emulator does);
