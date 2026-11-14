@@ -38,12 +38,6 @@ static const char *const S_FR_NOBONUS[LANG_COUNT] = { "YA VISITO HOY", "VISITED 
 static const char *const S_FR_EGG[LANG_COUNT] = { "FALTAN 2 ECLOSIONADOS", "NEEDS 2 HATCHED PETS", "IL FAUT 2 ECLOS", "BRAUCHT 2 GESCHLUEPFTE", "SERVONO 2 NATI", "PRECISA 2 CHOCADOS" };
 static const char *const S_FR_LATER[LANG_COUNT] = { "SE RESUELVE AL VOLVER", "SETTLES NEXT MEETING", "REGLE A LA PROCHAINE", "KLAERT SICH SPAETER", "SI RISOLVE DOPO", "RESOLVE NA PROXIMA" };
 
-// The tabs are concatenated alphabetically, so ui_hub.ino's layout macros are
-// not defined yet here. Same definition, token for token: if the hub's ever
-// changes, the compiler flags the redefinition instead of the rows drifting.
-#ifndef FEAT_ROW_Y
-#define FEAT_ROW_Y(i) (88 + (i) * 50)
-#endif
 
 static bool frPicking = false;   // the gift item chooser is up
 static uint8_t frPickIdx = 0;

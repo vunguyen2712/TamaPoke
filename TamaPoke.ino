@@ -46,7 +46,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "3.13"
+#define FW_VERSION "3.14"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -128,6 +128,13 @@ bool bagOpen = false;
 bool challengeOpen = false;
 bool friendsOpen = false;
 uint8_t hubPage = 0;   // one page today; a seventh row pages instead of shrinking
+// Shared look of every Adventure screen (helpers in ui_hub.ino).
+#define FEAT_ROW_X 70
+#define FEAT_ROW_W 326
+#define FEAT_ROW_H 44
+#define FEAT_ROW_Y(i) (88 + (i) * 50)
+#define FEAT_BACK_Y 392      // the BACK pill at the bottom of every feature screen
+#define FEAT_BACK_H 40
 #define MENU_X 73
 // Four rows: PARTY and GYMS came out, since a swipe right and a swipe left now
 // reach them directly. Sized to the bezel -- the panel is 320 wide, so 160 from

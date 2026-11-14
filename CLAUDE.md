@@ -249,6 +249,20 @@ Shared plumbing, so features never reach into each other:
 - `PartyMon` is 32 bytes now (`held` + `spare` appended); `Party::begin()`
   migrates both the party and the box from the 26- and 30-byte strides.
 
+**Round 2 (v3.14)** adds the hub's second page (CHALLENGE, FRIENDS) and
+features that live on the pet's own screen. Those never edit render()/onTap():
+they hang off `featSceneOverlay()` (under the UI: weather, `ui_weather.ino`),
+`featMainOverlay()` (above it: the wild "!" badge, RANK UP!, the personality
+cheer) and `featMainTap()`. The shared layout macros `FEAT_ROW_*`/`FEAT_BACK_*`
+live in TamaPoke.ino because tabs concatenate alphabetically. Per feature:
+`docs/adventure-wild-chain.md` (alert + shiny chains, `Wild::peek()` is the one
+"what comes next"), `adventure-rank.md` (rank, avatar/theme unlocks inside
+drawScene), `adventure-challenge.md` (weekly rule; `challengeAllowsSquad()` for
+both the picker and the start), `adventure-habitat.md` (overlay + Pokedex
+HABITAT list, header-only `habitat.h` reading wild.cpp), `adventure-persona.md`
+(traits; banked ones live in `PartyMon::spare`), `adventure-friends.md`
+(gift swap two-phase commit, visits; LINK_PROTO 3 -- older boards refuse).
+
 `tests/run.sh` no longer needs SDL (only the clickable emulator does);
 `SKIP_FW=1` skips its arduino-cli step.
 

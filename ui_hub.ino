@@ -12,12 +12,9 @@
 // alphabetically), so everything here may use the sketch's statics.
 
 // Shared look for every feature screen, so five screens read as one game.
-#define FEAT_ROW_X 70
-#define FEAT_ROW_W 326
-#define FEAT_ROW_H 44
-#define FEAT_ROW_Y(i) (88 + (i) * 50)
-#define FEAT_BACK_Y 392      // the BACK pill at the bottom of every feature screen
-#define FEAT_BACK_H 40
+// Layout constants (FEAT_ROW_*, FEAT_BACK_*) live in TamaPoke.ino next to the
+// hub flags: tabs are concatenated alphabetically, so a tab before this one
+// (ui_bag, ui_friends ...) could not see them if they were defined here.
 
 static const char *const S_HUB_TITLE[LANG_COUNT] = { "AVENTURA", "ADVENTURE", "AVENTURE", "ABENTEUER", "AVVENTURA", "AVENTURA" };
 static const char *const S_HUB_WILD[LANG_COUNT]  = { "SALVAJES", "WILD", "SAUVAGES", "WILDNIS", "SELVATICI", "SELVAGENS" };
