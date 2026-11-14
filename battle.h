@@ -88,3 +88,18 @@ void battleEndTurn(Combatant &c, TurnLog &log);
 // a move kills this turn, and whether a status or a stat boost is worth the
 // turn it costs.
 uint8_t aiChooseMove(const Combatant &self, const Combatant &foe, bool smart);
+
+// True if `mv` can deal damage (not a status move, has power).
+bool moveDamages(uint8_t mv);
+// Every opponent must be able to fight back. A foe whose level-appropriate
+// moves include nothing that deals damage -- a level 3 MAGIKARP knows nothing
+// at all, a CATERPIE only TACKLE + STRING SHOT at best -- is given the
+// strongest damaging move its learnset allows at its level, or STRUGGLE (what
+// the real games do when there is nothing else) if there is none. It goes into
+// an empty slot, else over a status move. Never used on the player's side.
+void foeEnsureAttack(Combatant &c);
+// A wild creature's choice: random like the easy AI, but it reaches for a
+// damaging move `attackPct` percent of the time when it knows one, so a foe
+// with TACKLE + GROWL does not spend half its turns growling.
+uint8_t aiChooseMoveWild(const Combatant &self, uint8_t attackPct);
+#define WILD_ATTACK_PCT 80

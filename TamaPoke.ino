@@ -3424,6 +3424,7 @@ static void foeFromSpecies(Combatant &c, int16_t dex, uint8_t lvl, uint8_t iv) {
   foe.ageMinutes = (uint32_t)(lvl ? lvl - 1 : 0) * MINUTES_PER_LEVEL;
   foe.relearnFromLevel();
   combatantFromPet(c, foe);
+  foeEnsureAttack(c);   // every opponent can fight back (battle.cpp)
 }
 
 // Your side: the live pet first, then the banked party.
@@ -3584,6 +3585,7 @@ void startBattle(int16_t dex, uint8_t lvl) {
   foe.ageMinutes = (uint32_t)(lvl ? lvl - 1 : 0) * MINUTES_PER_LEVEL;
   foe.relearnFromLevel();
   combatantFromPet(btlFoe, foe);
+  foeEnsureAttack(btlFoe);   // a wild level 3 MAGIKARP knows nothing at all
   btlMsgCount = 0;
   btlOver = false;
   btlWon = false;
@@ -3735,7 +3737,10 @@ static void btlResolve(uint8_t yourMove) {
     }
     lan.pendingAct = 0;
   } else {
-    foeMove = aiChooseMove(btlFoe, btlYou, btlHard);
+    // A wild creature fights like one: mostly attacks, sometimes a status
+    // move. Trainers keep their AI (easy random, hard reads the chart).
+    foeMove = (btlKind == BK_WILD) ? aiChooseMoveWild(btlFoe, WILD_ATTACK_PCT)
+                                   : aiChooseMove(btlFoe, btlYou, btlHard);
   }
   (void)foeSwitched;
 
