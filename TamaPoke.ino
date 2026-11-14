@@ -237,6 +237,7 @@ enum : uint8_t {
   // the Adventure hub and the screens it leads to (ui_*.ino)
   SCR_HUB, SCR_WILD, SCR_TASKS, SCR_TOWER, SCR_DAYCARE, SCR_BAG,
   SCR_CHALLENGE, SCR_FRIENDS,
+  SCR_HABITAT,   // the Pokedex habitat list (ui_habitat.ino), a sub-screen of the gallery
   SCR_MAIN, SCR_COUNT
 };
 extern const char *const SCREEN_NAME[SCR_COUNT];   // const is internal linkage in C++
@@ -264,6 +265,7 @@ const char *const SCREEN_NAME[SCR_COUNT] = {
   "minigame",
   "hub", "wild", "tasks", "tower", "daycare", "bag",
   "challenge", "friends",
+  "habitat",
   "main"
 };
 
@@ -1286,6 +1288,7 @@ void onSwipeV(int dir) {
   if (spdOpen) { leaveSpeed(); return; }
   if (galleryOpen) {
     if (galleryDetail) { galleryDetail = 0; galleryPmd.unload(); galleryDirty = true; return; }
+    if (habitatShown()) { habitatSwipeV(dir); return; }   // ui_habitat.ino
     galleryRegion = (uint8_t)((galleryRegion + (dir > 0 ? 1 : GAL_REGIONS - 1)) % GAL_REGIONS);
     galleryPage = 0;
     galleryDirty = true;
@@ -1696,6 +1699,7 @@ void onSwipe(int dir) {
     galleryDirty = true;
     return;
   }
+  if (habitatShown()) { habitatSwipe(dir); return; }   // pages; past the ends, back to the grid
   int np = galleryPage - dir;  // deslizar a la izquierda avanza pagina
   if (np < 0) {                // back past the first page = the region chooser
     galleryPick = true;
@@ -1913,6 +1917,7 @@ void onTap(int16_t x, int16_t y) {
       }
       return;
     }
+    if (habitatShown()) { habitatTap(x, y); return; }   // ui_habitat.ino
     galleryTap(x, y);
     return;
   }
@@ -2201,7 +2206,10 @@ RTC_NOINIT_ATTR uint32_t gCrumbHeap;
 // Which screen is on the panel RIGHT NOW, in the same order render() tests.
 uint8_t uiCurrentScreen() {
   if (pet.awaitingStarter()) return starterRegionDone ? SCR_STARTER : SCR_REGION;
-  if (galleryOpen) return galleryPick ? SCR_DEXPICK : SCR_GALLERY;
+  // asked every frame, open or not: it also drops a habitat page left behind
+  // when the Pokedex closed, so re-opening it never lands there (ui_habitat.ino)
+  bool habitat = habitatShown();
+  if (galleryOpen) return galleryPick ? SCR_DEXPICK : (habitat ? SCR_HABITAT : SCR_GALLERY);
   if (movePickOpen) return SCR_MOVEPICK;
   if (partyOpen) return boxOpen ? SCR_BOX : SCR_PARTY;
   if (kbOpen) return SCR_KEYBOARD;
@@ -2269,6 +2277,7 @@ void render() {
   }
   if (galleryOpen) {
     if (galleryPick) { renderRegionPick(RPICK_FOR_DEX); return; }
+    if (habitatShown()) { renderHabitat(); return; }
     renderGallery();
     return;
   }
@@ -5749,6 +5758,7 @@ void renderGallery() {
       const uint8_t *t = thumbs.get(galleryDetail);
       if (t) drawThumb(t, CX - GAL_CELL, 135, 4, !reg);
     }
+    drawHabitatDetail(galleryDetail);   // where and when it turns up (ui_habitat.ino)
     gfx->setTextColor(UI_INK);
     gfx->setTextSize(2);
     gfx->setCursor(CX - strlen(T(S_DETAIL_BACK)) * 6, 408);
@@ -5804,8 +5814,10 @@ void renderGallery() {
   snprintf(pg, sizeof(pg), "%d/%d", galleryPage + 1, (int)GAL_PAGES);
   gfx->setTextColor(UI_TRACK);
   gfx->setTextSize(2);
-  gfx->setCursor(CX - (int)strlen(pg) * 6, 428);
+  // left of centre, to make room for the HABITAT pill (ui_habitat.ino)
+  gfx->setCursor(160 - (int)strlen(pg) * 6, 428);
   gfx->print(pg);
+  drawGalleryHabitatBtn();
   gfx->flush();
 }
 
@@ -5821,6 +5833,7 @@ void galleryTap(int16_t x, int16_t y) {
     galleryPmd.unload();
     return;
   }
+  if (galleryHabitatBtnHit(x, y)) { sfxPlay(SFX_TAP); habitatOpenFromGallery(); return; }
   int c = (x - GAL_X) / GAL_CELL, r = (y - GAL_Y) / GAL_CELL;
   if (c < 0 || c > 3 || r < 0 || r > 3) return;
   int16_t dex = GAL_LO + galleryPage * GAL_PER_PAGE + r * 4 + c;
