@@ -61,6 +61,7 @@ const SaveField SAVE_FIELDS[] = {
   //
   //
   // ---- wild alerts and shiny chains (wild.cpp) -- keys go below this line
+  { "wchain", SK_BYTES },   // Wild::Chain: chained dex, length, best, day of the last link
   //
   //
   // ---- trainer rank, titles, unlocks (rank.cpp) -- keys go below this line

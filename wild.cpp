@@ -178,18 +178,62 @@ uint16_t wildWeight(int16_t dex, uint8_t weather, uint8_t tod) {
 }
 
 int16_t wildRollSpecies(uint8_t region, uint8_t weather, uint8_t tod, uint8_t level, uint32_t seed) {
-  uint32_t total = 0;
-  for (int16_t d = 1; d <= DEX_COUNT; d++)
-    if (wildEligible(d, region, level)) total += wildWeight(d, weather, tod);
+  return wildRollSpeciesChained(region, weather, tod, level, seed, 0);
+}
+
+int16_t wildRollSpeciesChained(uint8_t region, uint8_t weather, uint8_t tod, uint8_t level, uint32_t seed,
+                               int16_t chainDex) {
+  uint32_t others = 0, own = 0;
+  for (int16_t d = 1; d <= DEX_COUNT; d++) {
+    if (!wildEligible(d, region, level)) continue;
+    uint16_t w = wildWeight(d, weather, tod);
+    if (d == chainDex) own = w; else others += w;
+  }
+  // The chain boost: a chained species that can spawn now weighs as much as
+  // everything else together -- half the roll. Without it a chain in a pool of
+  // hundreds would be a lottery, not a hunt.
+  uint32_t boosted = own;
+  if (own && others > own) boosted = others;
+  uint32_t total = others + boosted;
   if (!total) return 0;
   uint32_t r = mix32(seed) % total;
   for (int16_t d = 1; d <= DEX_COUNT; d++) {
     if (!wildEligible(d, region, level)) continue;
-    uint16_t w = wildWeight(d, weather, tod);
+    uint32_t w = (d == chainDex) ? boosted : wildWeight(d, weather, tod);
     if (r < w) return d;
     r -= w;
   }
   return 0;
+}
+
+uint16_t wildShinyNumer(uint8_t chainLen, bool charm) {
+  uint16_t n = 1u + chainLen;
+  if (n > WILD_CHAIN_SHINY_CAP) n = WILD_CHAIN_SHINY_CAP;
+  return charm ? n * 2 : n;
+}
+
+bool wildConditional(int16_t dex) {
+  if (dex < 1 || dex > DEX_COUNT) return false;
+  for (uint8_t wx = 0; wx < WX_COUNT; wx++)
+    for (uint8_t t = 0; t < WT_COUNT; t++)
+      if (!wildTimeAllows(dex, wx, t)) return true;
+  return false;
+}
+
+bool wildIsRare(int16_t dex) {
+  if (dex < 1 || dex > DEX_COUNT) return false;
+  uint8_t r = DEX_TBL[dex].rarity;
+  return r == R_RARO || (r == R_EVO && rootRarity(dex) == R_RARO);
+}
+
+uint8_t wildAlertWhy(int16_t dex, bool shiny, bool registered) {
+  if (dex < 1 || dex > DEX_COUNT) return 0;
+  uint8_t why = 0;
+  if (wildIsRare(dex)) why |= WA_RARE;
+  if (shiny) why |= WA_SHINY;
+  if (wildConditional(dex)) why |= WA_COND;
+  if (!registered) why |= WA_NEW;
+  return why;
 }
 
 uint8_t wildLevelFor(uint8_t petLevel, uint32_t seed) {
@@ -222,6 +266,12 @@ void Wild::begin() {
   // A shorter blob (an older build) reads into the front; State is append-only.
   if (have && have <= sizeof(st)) prefs.getBytes("wild", &st, have);
   gift = prefs.getBool("wgift", false);
+  ch = Chain();
+  size_t hc = prefs.getBytesLength("wchain");
+  if (hc && hc <= sizeof(ch)) prefs.getBytes("wchain", &ch, hc);
+  if (ch.dex < 1 || ch.dex > DEX_COUNT || !ch.len) ch = Chain{0, 0, ch.best, 0};
+  if (ch.len > WILD_CHAIN_MAX) ch.len = WILD_CHAIN_MAX;
+  if (ch.best > WILD_CHAIN_MAX) ch.best = WILD_CHAIN_MAX;
   // Never trust stored bytes to index anything.
   if (st.used > WILD_PER_DAY) st.used = WILD_PER_DAY;
   if (st.phase > WP_CATCH || st.dex < 1 || st.dex > DEX_COUNT) { st.phase = WP_NONE; st.dex = 0; }
@@ -255,27 +305,81 @@ void Wild::spend() {
   save();
 }
 
+bool Wild::peek(uint32_t day, uint32_t epoch, uint8_t region, uint8_t petLevel, bool charm, WildNext &out) const {
+  out = WildNext();
+  // newDay(day), simulated: a new day is a full one, and a creature merely MET
+  // on another day has left with it.
+  bool fresh = day != st.day;
+  uint8_t used = fresh ? 0 : st.used;
+  uint8_t phase = (fresh && st.phase == WP_MEET) ? (uint8_t)WP_NONE : st.phase;
+  if (phase != WP_NONE) {
+    out.dex = st.dex; out.level = st.level; out.shiny = st.shiny;
+    out.weather = st.weather; out.tod = st.tod; out.out = true;
+    return st.dex >= 1;
+  }
+  if (used >= WILD_PER_DAY) return false;
+  uint8_t wx = wildWeatherOf(day);
+  uint8_t tod = wildTimeOf(epoch);
+  uint32_t seed = mix32(day ^ mix32(used + 1u) ^ mix32((uint32_t)tod * 977u + (uint32_t)region * 31u + 7u));
+  uint8_t lvl = wildLevelFor(petLevel, seed);
+  int16_t cd = chainDex(day);
+  int16_t d = wildRollSpeciesChained(region, wx, tod, lvl, seed, cd);
+  if (!d) return false;
+  // The chain's shiny bonus is for the chained species only.
+  uint16_t n = wildShinyNumer(d == cd ? chainLen(day) : 0, charm);
+  out.dex = d;
+  out.level = lvl;
+  out.shiny = (mix32(seed ^ 0x5417u) % WILD_SHINY_ODDS) < n;
+  out.weather = wx;
+  out.tod = tod;
+  return true;
+}
+
 bool Wild::roll(uint32_t day, uint32_t epoch, uint8_t region, uint8_t petLevel, bool charm) {
   newDay(day);
   if (st.phase != WP_NONE) return true;
-  if (!left()) return false;
-  uint8_t wx = wildWeatherOf(day);
-  uint8_t tod = wildTimeOf(epoch);
-  uint32_t seed = mix32(day ^ mix32(st.used + 1u) ^ mix32((uint32_t)tod * 977u + (uint32_t)region * 31u + 7u));
-  uint8_t lvl = wildLevelFor(petLevel, seed);
-  int16_t d = wildRollSpecies(region, wx, tod, lvl, seed);
-  if (!d) return false;
-  st.dex = d;
-  st.level = lvl;
-  st.shiny = (mix32(seed ^ 0x5417u) % WILD_SHINY_ODDS) < (charm ? 2u : 1u);
+  WildNext n;
+  if (!peek(day, epoch, region, petLevel, charm, n)) return false;
+  st.dex = n.dex;
+  st.level = n.level;
+  st.shiny = n.shiny;
   st.throws = 0;
-  st.weather = wx;
-  st.tod = tod;
+  st.weather = n.weather;
+  st.tod = n.tod;
   st.encDay = day;
   st.phase = WP_MEET;
   save();
-  gameEvent(EV_WILD_SEEN, d);
+  gameEvent(EV_WILD_SEEN, n.dex);
+  if (n.shiny) gameEvent(EV_SHINY_FOUND, n.dex);
   return true;
+}
+
+// ---------- the shiny chain ----------
+uint8_t Wild::chainLen(uint32_t day) const {
+  if (!ch.len || ch.dex < 1) return 0;
+  // A whole day with no wild win breaks it: the last link on day D keeps it
+  // alive through D + 1. (A clock going backwards does not break it.)
+  if (day > ch.day + 1) return 0;
+  return ch.len;
+}
+
+void Wild::chainWin(int16_t dex, uint32_t day) {
+  if (dex < 1 || dex > DEX_COUNT) return;
+  uint8_t cur = chainLen(day);
+  bool grew = true;
+  if (cur && ch.dex == dex) {
+    grew = cur < WILD_CHAIN_MAX;
+    ch.len = grew ? cur + 1 : WILD_CHAIN_MAX;
+  } else { ch.dex = dex; ch.len = 1; }
+  ch.day = day;
+  if (ch.len > ch.best) ch.best = ch.len;
+  saveChain();
+  if (grew) gameEvent(EV_CHAIN, ch.len);
+}
+
+void Wild::saveChain() {
+  if (!opened) return;
+  prefs.putBytes("wchain", &ch, sizeof(ch));
 }
 
 void Wild::fightStarted() {
@@ -292,6 +396,7 @@ uint8_t Wild::battleEnded(bool won, bool ran, uint8_t dropRoll100, Bag &bg) {
   st.throws = 0;
   save();
   gameEvent(EV_WILD_WIN, st.dex);
+  chainWin(st.dex, st.day);
   // Berries: ORAN 20%, SITRUS 5%, LUM 3%.
   uint8_t drop = ITEM_NONE;
   if (dropRoll100 < 20) drop = ITEM_ORAN_BERRY;
@@ -355,7 +460,9 @@ bool Wild::giveGift(Bag &bg) {
 
 void Wild::clearAll() {
   st = State();
+  ch = Chain();
   gift = false;
   save();
+  saveChain();
   if (opened) prefs.putBool("wgift", false);
 }
