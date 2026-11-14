@@ -115,6 +115,16 @@ int main() {
   toMain();
   ck(on("main"), "on the main screen");
   ck(wildAlertNow() != 0, "hatched: the alert is up");
+  // clock unset, checked while nearly everything is still NEW, with the
+  // companion that the encounter waiting on day 0 WOULD be notable
+  { uint32_t keep = pet.lastSeenEpoch;
+    pet.lastSeenEpoch = 0;
+    WildNext n0; bool h0 = peekNow(n0);
+    ck(h0 && wildAlertWhy(n0.dex, n0.shiny, pet.isRegistered(n0.dex)) != 0,
+       "clock unset: there IS a notable encounter on day 0...");
+    ck(wildAlertNow() == 0, "...but with no clock the badge is hidden");
+    pet.lastSeenEpoch = keep;
+    ck(wildAlertNow() != 0, "and it is back with the clock"); }
   ck(badgeDrawn(), "and the badge is drawn");
   ck(gfx->frameReady, "the main screen with the badge flushes");
   { char lbl[32]; wildHubLabel(lbl, sizeof(lbl), "WILD");
@@ -162,10 +172,6 @@ int main() {
   { int tries = 0;
     while (!wildAlertNow() && tries < 20) { setDay(DAY0 + 41 + tries, 13); tries++; }
     ck(wildAlertNow() != 0, "a later day with a notable encounter (the companion)"); }
-  { uint32_t keep = pet.lastSeenEpoch;
-    pet.lastSeenEpoch = 0;
-    ck(wildAlertNow() == 0, "clock unset: hidden");
-    pet.lastSeenEpoch = keep; }
   { pet.ceremony = CER_FAREWELL;
     ck(wildAlertNow() == 0, "mid-ceremony: hidden");
     pet.ceremony = CER_NONE; }
