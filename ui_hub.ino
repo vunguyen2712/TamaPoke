@@ -98,6 +98,7 @@ void featLine(int y, const char *txt, uint16_t col) {
 
 // Every feature screen returns HERE, never all the way to the pet.
 void featCloseAll() {
+  if (friendsOpen) friendsLeave();   // a live FRIENDS link says goodbye, frees the radio
   wildOpen = tasksOpen = towerOpen = daycareOpen = bagOpen = false;
   challengeOpen = friendsOpen = false;
 }

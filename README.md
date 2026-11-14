@@ -811,7 +811,26 @@ for 2.5 s. It also nudges its needs a little -- **only while awake**.
 
 #### Two-board gifts and visits
 
-(to be written by the two-board gifts and visits feature)
+ADVENTURE > FRIENDS (hub page 2). Two boards pair exactly like a LAN battle --
+one taps HOST, the other JOIN (two HOSTs or two JOINs also work: the higher
+device id hosts) -- over the same ESP-NOW link, version check and build
+fingerprint. A board on FRIENDS and a board on LAN BATTLE refuse each other
+("FRIEND IS ON LAN"); different builds refuse with "DIFFERENT VERSION". A friend
+that goes quiet for 12 s, or leaves, ends the session with "YOUR FRIEND LEFT".
+
+Once paired each side sees the friend's trainer name and creature, and can:
+
+| | rule |
+|---|---|
+| **GIFT SWAP** | Each side offers ONE item from its own bag (any item except key items; tap the item row to cycle, then OFFER). Both receive the other's. A board with no giftable item offers a **small gift** instead -- a POKE BALL or an ORAN BERRY, made fresh, so nothing leaves its bag. |
+| | **Once a day per board** (the care-streak day). A swap that is called off -- an invalid item, a bag already holding 99 of what would arrive -- does not use up the day. |
+| | Items only change hands when BOTH boards have agreed. If the link breaks at the exact moment of the swap, the board left unsure keeps the gift aside ("GIFT IN TRANSIT", a `*` on the hub row) and it settles by itself the next time those two boards pair: either it arrives or it comes back. Until then that board cannot swap with anyone else (visits still work). A lost packet never copies or destroys an item. |
+| **VISIT** | Either side taps VISIT and both screens show the two creatures side by side for 5 s (name, level, `*` = shiny). Both pets must be hatched. The first visit each day gives **+15 joy and +3 bond** to each pet; the bond still counts against the normal daily bond cap of 20. Further visits that day are just for show. |
+
+Events for tasks: GIFT SENT and GIFT RECEIVED when a swap completes on that
+board; VISIT (the friend's species) when a visit pays its daily bonus.
+
+Design and the swap protocol: `docs/adventure-friends.md`.
 
 &nbsp;
 

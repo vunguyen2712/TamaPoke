@@ -185,6 +185,10 @@ public:
   // tasks), which is private; the one definition of a day stays today(), so a
   // feature's "once a day" and the care streak can never disagree.
   uint32_t currentDay() const { return today(); }
+  // A two-board visit (friends.cpp): joy, and the bond through addBond() so
+  // the daily bond cap applies exactly as it does to playing. An egg gains
+  // nothing. Returns the bond actually gained (0 once the cap is reached).
+  uint8_t friendVisit(uint8_t joyGain, uint8_t bondGain);
   // The level at which `dex` may legally use learnset entry `i`. A level-up
   // move carries its own; a level-0 entry is a TM/tutor/egg move, which the
   // data gives no level at all, and those unlock together at TM_LEVEL.
