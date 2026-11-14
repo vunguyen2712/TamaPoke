@@ -58,7 +58,7 @@ uint8_t learnableFor(int16_t dex, uint8_t lvl, uint8_t *out, uint8_t max);
 // Adventure screens (ui_*.ino) that page
 #include "items.h"
 extern bool hubOpen, tasksOpen, bagOpen;
-extern uint8_t tasksPage, bagPage;
+extern uint8_t tasksPage, bagPage, hubPage;
 
 int main(){
   setup();
@@ -300,6 +300,8 @@ int main(){
   // ---- the Adventure screens. Each feature's own ui test pages them too;
   // they are here as well so no paged screen is ever missing from this list.
   hubOpen = false;
+  clearAll(); hubOpen=true;                       check("hub",      &hubOpen,      &hubPage);
+  hubOpen = false; hubPage = 0;
   clearAll(); tasksOpen=true;                     check("tasks",    &tasksOpen,    &tasksPage);
   tasksOpen = false;
   for (uint8_t i = 1; i < ITEM_COUNT; i++) bag.add(i, 3);   // enough rows for a second page

@@ -251,3 +251,7 @@ void wildBattleEnded(bool won, bool ran) {
   wildMsgItem = drop;
   wildMsg = won ? WM_WON : (ran ? WM_RAN : WM_LOST);
 }
+
+// ---- main-screen alert (feature 1). Called from ui_hub.ino's hooks.
+void wildMainBadge() {}
+bool wildMainBadgeTap(int16_t x, int16_t y) { (void)x; (void)y; return false; }

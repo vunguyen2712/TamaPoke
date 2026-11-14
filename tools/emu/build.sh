@@ -27,6 +27,7 @@ g++ -std=c++17 -O1 -w \
   -o tamapoke-emu \
   sketch.cpp wavout.cpp "$ROOT/gbsynth.cpp" "$ROOT/pet.cpp" "$ROOT/i18n.cpp" "$ROOT/party.cpp" "$ROOT/battle.cpp" "$ROOT/link.cpp" "$ROOT/save.cpp" \
   "$ROOT/game_events.cpp" "$ROOT/items.cpp" "$ROOT/wild.cpp" "$ROOT/tasks.cpp" "$ROOT/tower.cpp" "$ROOT/breed.cpp" \
+  "$ROOT/rank.cpp" "$ROOT/challenge.cpp" "$ROOT/persona.cpp" "$ROOT/friends.cpp" \
   host_impl.cpp font.cpp clock.cpp main_sdl.cpp \
   $(sdl2-config --libs)
 

@@ -39,6 +39,10 @@
 #include "tasks.h"
 #include "tower.h"
 #include "breed.h"
+#include "rank.h"
+#include "challenge.h"
+#include "persona.h"
+#include "friends.h"
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
@@ -121,6 +125,8 @@ bool tasksOpen = false;
 bool towerOpen = false;
 bool daycareOpen = false;
 bool bagOpen = false;
+bool challengeOpen = false;
+bool friendsOpen = false;
 uint8_t hubPage = 0;   // one page today; a seventh row pages instead of shrinking
 #define MENU_X 73
 // Four rows: PARTY and GYMS came out, since a swipe right and a swipe left now
@@ -230,6 +236,7 @@ enum : uint8_t {
   SCR_GAME,
   // the Adventure hub and the screens it leads to (ui_*.ino)
   SCR_HUB, SCR_WILD, SCR_TASKS, SCR_TOWER, SCR_DAYCARE, SCR_BAG,
+  SCR_CHALLENGE, SCR_FRIENDS,
   SCR_MAIN, SCR_COUNT
 };
 extern const char *const SCREEN_NAME[SCR_COUNT];   // const is internal linkage in C++
@@ -256,6 +263,7 @@ const char *const SCREEN_NAME[SCR_COUNT] = {
   "lan", "pick", "battle", "win", "learn", "train", "menu",
   "minigame",
   "hub", "wild", "tasks", "tower", "daycare", "bag",
+  "challenge", "friends",
   "main"
 };
 
@@ -436,7 +444,7 @@ uint8_t btlRegion = 0;
 // What kind of fight is running, so the end of a battle can be routed to the
 // feature that started it (featBattleEnded in ui_hub.ino). Set by every
 // start*Battle(); a feature that starts its own fight sets it straight after.
-enum : uint8_t { BK_DEBUG = 0, BK_GYM, BK_LAN, BK_WILD, BK_TOWER, BK_REMATCH };
+enum : uint8_t { BK_DEBUG = 0, BK_GYM, BK_LAN, BK_WILD, BK_TOWER, BK_REMATCH, BK_CHALLENGE };
 uint8_t btlKind = BK_DEBUG;
 #define TRAINERS (TRAINER_SETS[gymRegion % GYM_REGIONS].list)
 #define BTL_TRAINERS (TRAINER_SETS[btlRegion % GYM_REGIONS].list)
@@ -736,6 +744,10 @@ void setup() {
   tasksBegin(pet);
   towerBegin();
   breedBegin();
+  rankBegin();
+  challengeBegin();
+  personaBegin();
+  friendsBegin();
   sdBegin();
   thumbs.load();
 
@@ -2014,6 +2026,7 @@ void onTap(int16_t x, int16_t y) {
       return;
     }
   }
+  if (featMainTap(x, y)) return;   // a feature's badge on the main screen
   // tapping the name/status band opens the menu. This band was inert before,
   // and it sits clear of inPetZone (which starts at y 95).
   if (y >= 28 && y < 94) {
@@ -2334,6 +2347,7 @@ void render() {
   // drawScene cubre los 466x466 completos: sin fillScreen(NEGRO) previo para
   // que un flush DMA solapado nunca capture negro a medias (anti-parpadeo)
   drawScene(pet.isEgg() ? 0 : DEX_TBL[pet.speciesId].biome, millis(), gNight);
+  featSceneOverlay();   // the weather, under the header/pet/buttons (ui_hub.ino)
 
   if (pet.ceremony) {
     const DexEntry &d = DEX_TBL[pet.speciesId];
@@ -2461,6 +2475,7 @@ void render() {
   }
 
   drawTasksNotice();   // "TASK DONE", for a moment after one completes
+  featMainOverlay();   // feature badges on the pet's screen (ui_hub.ino)
 
   if (menuOpen) drawMenu();
 

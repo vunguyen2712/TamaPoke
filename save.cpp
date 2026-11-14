@@ -59,6 +59,24 @@ const SaveField SAVE_FIELDS[] = {
   { "dxrw", SK_U8 },    // Pokedex rewards granted: bit0 SHINY CHARM, bit1 OVAL CHARM
   { "dxgf", SK_U8 },    // how many every-25 dex gifts have been paid
   //
+  //
+  // ---- wild alerts and shiny chains (wild.cpp) -- keys go below this line
+  //
+  //
+  // ---- trainer rank, titles, unlocks (rank.cpp) -- keys go below this line
+  //
+  //
+  // ---- weekly gym challenge (challenge.cpp) -- keys go below this line
+  //
+  //
+  // ---- weather overlay and habitat view -- keys go below this line
+  //
+  //
+  // ---- personalities (persona.cpp) -- keys go below this line
+  //
+  //
+  // ---- two-board gifts and visits (friends.cpp) -- keys go below this line
+  //
 };
 const uint16_t SAVE_FIELD_COUNT = sizeof(SAVE_FIELDS) / sizeof(SAVE_FIELDS[0]);
 

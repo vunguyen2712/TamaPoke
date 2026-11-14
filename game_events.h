@@ -33,6 +33,13 @@ enum GameEv : uint8_t {
   EV_BREED,          // arg = dex of the egg
   EV_ITEM_USED,      // arg = item id
   EV_DEX_REGISTER,   // arg = dex newly registered
+  EV_CHALLENGE_WIN,  // weekly gym challenge cleared; arg = week number (low 16 bits)
+  EV_RANK_UP,        // arg = new rank
+  EV_SHINY_FOUND,    // a shiny wild creature appeared; arg = dex
+  EV_CHAIN,          // a wild chain grew; arg = new chain length
+  EV_GIFT_SENT,      // two-board gift; arg = item
+  EV_GIFT_RECEIVED,  // arg = item
+  EV_VISIT,          // two boards' pets visited; arg = peer's dex
   EV_COUNT
 };
 
@@ -40,6 +47,6 @@ typedef void (*GameEvSink)(GameEv ev, int16_t arg);
 
 void gameEvent(GameEv ev, int16_t arg = 0);
 // Up to GAME_EV_SINKS subscribers; subscribing the same sink twice is a no-op.
-#define GAME_EV_SINKS 6
+#define GAME_EV_SINKS 10
 bool gameEventSubscribe(GameEvSink sink);
 void gameEventClearSinks();   // tests only

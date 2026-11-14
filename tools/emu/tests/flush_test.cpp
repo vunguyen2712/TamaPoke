@@ -28,6 +28,7 @@ extern bool boxOpen, releaseConfirm;
 extern Party party;
 // the Adventure hub and its feature screens (ui_*.ino)
 extern bool hubOpen, wildOpen, tasksOpen, towerOpen, daycareOpen, bagOpen;
+extern bool challengeOpen, friendsOpen; extern uint8_t hubPage;
 void startBattle(int16_t dex, uint8_t lvl);
 
 static int bad = 0;
@@ -37,6 +38,7 @@ static void clearAll(){
   boxOpen=releaseConfirm=false;
   partyDetail=boxDetail=0;
   hubOpen=wildOpen=tasksOpen=towerOpen=daycareOpen=bagOpen=false;
+  challengeOpen=friendsOpen=false; hubPage=0;
 }
 static void check(const char *name){
   gfx->frameReady = false;
@@ -95,6 +97,9 @@ int main(){
   clearAll(); towerOpen=true;    check("tower");
   clearAll(); daycareOpen=true;  check("daycare");
   clearAll(); bagOpen=true;      check("bag");
+  clearAll(); hubOpen=true; hubPage=1; check("hub p2");
+  clearAll(); challengeOpen=true; check("challenge");
+  clearAll(); friendsOpen=true;  check("friends");
 
   clearAll();                       crumbIs("main");
   clearAll(); trainOpen=true;       crumbIs("train");
@@ -111,6 +116,8 @@ int main(){
   clearAll(); towerOpen=true;       crumbIs("tower");
   clearAll(); daycareOpen=true;     crumbIs("daycare");
   clearAll(); bagOpen=true;         crumbIs("bag");
+  clearAll(); challengeOpen=true;   crumbIs("challenge");
+  clearAll(); friendsOpen=true;     crumbIs("friends");
   clearAll(); startBattle(9,50);    crumbIs("battle");
   clearAll();
 

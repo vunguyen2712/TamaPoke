@@ -590,6 +590,42 @@ card (has art, its pack is present, hatches or evolves from something that can).
 The SHINY CHARM halves the egg's shiny roll: 1/48 -> 1/24, and the best case
 1/8 -> 1/4.
 
+#### Wild alerts and shiny chains
+
+(to be written by the wild alerts and shiny chains feature)
+
+&nbsp;
+
+#### Trainer rank and titles
+
+(to be written by the trainer rank and titles feature)
+
+&nbsp;
+
+#### Weekly gym challenge
+
+(to be written by the weekly gym challenge feature)
+
+&nbsp;
+
+#### Weather on the main screen and the habitat view
+
+(to be written by the weather on the main screen and the habitat view feature)
+
+&nbsp;
+
+#### Personalities
+
+(to be written by the personalities feature)
+
+&nbsp;
+
+#### Two-board gifts and visits
+
+(to be written by the two-board gifts and visits feature)
+
+&nbsp;
+
 ## Hardware
 
 - Board: [ESP32-S3-Touch-AMOLED-1.75](https://www.waveshare.com/wiki/ESP32-S3-Touch-AMOLED-1.75)
