@@ -66,6 +66,12 @@ const SaveField SAVE_FIELDS[] = {
   //
   // ---- trainer rank, titles, unlocks (rank.cpp) -- keys go below this line
   //
+  { "rkTop", SK_U8 },   // highest trainer rank reached (shown; never goes down)
+  { "rkCat", SK_U16 },  // wild catches counted for the rank
+  { "rkChW", SK_U16 },  // weekly challenge wins counted for the rank
+  { "rkChL", SK_U16 },  // last challenge week counted, +1 (0 = none)
+  { "rkThm", SK_U8 },   // home scene theme (THEME_*)
+  { "rkAvG", SK_U8 },   // avatars kept although their rank is not reached (bitmask)
   //
   // ---- weekly gym challenge (challenge.cpp) -- keys go below this line
   //

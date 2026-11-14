@@ -630,7 +630,51 @@ chained species and RUN from the others. Design notes:
 
 #### Trainer rank and titles
 
-(to be written by the trainer rank and titles feature)
+One trainer rank, built from progress you already have. It is shown on the last
+page of the player card (swipe down from the pet, then left past the medals):
+your title, the rank number and a bar to the next rank.
+
+| progress | points |
+|---|---|
+| each badge won on easy (any region, gyms, Elite 4 and champion) | 10 |
+| each badge won on hard (on top of the easy one) | 10 |
+| each gym rematch trainer beaten | 10 |
+| each species registered in the Pokedex | 2 |
+| each floor of your best Battle Tower streak (up to 100) | 5 |
+| each wild catch (up to 250) | 2 |
+| each weekly gym challenge cleared (up to 50; one per week) | 30 |
+
+| rank | title | points |
+|---|---|---|
+| 1 | ROOKIE | 0 |
+| 2 | TRAINER | 30 |
+| 3 | ACE TRAINER | 100 |
+| 4 | GYM CHALLENGER | 200 |
+| 5 | GYM LEADER | 350 |
+| 6 | VETERAN | 600 |
+| 7 | ELITE | 1000 |
+| 8 | CHAMPION | 1600 |
+| 9 | MASTER | 2500 |
+| 10 | LEGEND | 4000 |
+
+The rank shown **never goes down**: the highest one reached is kept, even if the
+points behind it later fall (a tower run that ends does not touch your BEST, but
+nothing can take a rank away either way). Catches and challenge wins are counted
+from the moment this feature is installed. On a rank-up the pet's screen shows
+RANK UP! and the new title for 4 seconds, the next time it is on screen
+(after any MEDAL! popup, which sits in the same place). A save
+from before ranks starts at the rank its progress already earns.
+
+Unlocks, on the rank page:
+
+- **Avatars.** RED, BLUE and GIRL are open from the start; YOUNGSTER at rank 2,
+  ACE M and ACE F at rank 4, HIKER at rank 6, SAILOR at rank 8. Locked ones are
+  greyed with the rank they need (R4 ...) and cannot be picked; tapping the
+  avatar on the first page skips them. An avatar you were already wearing
+  before ranks existed stays yours.
+- **Home scenes.** CLASSIC always; SUNSET at rank 3 (a violet-to-orange
+  daytime sky), STARRY at rank 5 (night sky, moon and twinkling stars at any
+  hour), FESTIVAL at rank 7 (bunting across the sky). Tap one to use it.
 
 &nbsp;
 

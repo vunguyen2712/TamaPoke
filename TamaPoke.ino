@@ -496,7 +496,9 @@ bool playerOpen = false;
 // one page, and the page you are on IS the region -- no extra control needed,
 // and horizontal paging already works everywhere else.
 uint8_t playerPage = 0;
-#define PLAYER_PAGES (GYM_REGIONS + 1)
+// ... and last, the trainer rank page (ui_rank.ino).
+#define PLAYER_PAGES (GYM_REGIONS + 2)
+#define PLAYER_RANK_PAGE (GYM_REGIONS + 1)
 #define playerBadgeRegion (playerPage % GYM_REGIONS)
 uint8_t gymPage = 0;
 #define GYM_ROWS 5
@@ -1749,11 +1751,12 @@ void onTap(int16_t x, int16_t y) {
     }
     // the avatar is the only other live target; everything else backs out
     if (playerPage == 0 && x > CX - 40 && x < CX + 40 && y > 70 && y < 146) {
-      pet.avatar = (uint8_t)((pet.avatar + 1) % AVATAR_COUNT);
+      pet.avatar = rankNextAvatar(pet.avatar);   // skips the ones the rank has not unlocked
       pet.flushSave();
       sfxPlay(SFX_TAP);
       return;
     }
+    if (playerPage == PLAYER_RANK_PAGE && rankPageTap(x, y)) return;   // an avatar or a theme
     playerOpen = false;
     return;
   }
@@ -2093,12 +2096,14 @@ void drawClouds(uint32_t now, uint16_t col) {
 }
 
 void drawScene(uint8_t biome, uint32_t now, bool night) {
+  night = rankSceneNight(night);   // the player's scene theme (ui_rank.ino)
   int h = sceneHour();
   uint16_t top, bot;
   if (night)            { top = C565(0x0c, 0x12, 0x24); bot = C565(0x1e, 0x26, 0x46); }
   else if (h < 8)       { top = C565(0xd1, 0x6a, 0x86); bot = C565(0xf3, 0xb8, 0x7c); }  // amanecer
   else if (h < 18)      { top = C565(0x8f, 0xc8, 0xea); bot = C565(0xdc, 0xee, 0xe6); }  // dia
   else                  { top = C565(0xc7, 0x5a, 0x4a); bot = C565(0xf0, 0xae, 0x64); }  // atardecer
+  rankSceneSky(top, bot, night);
 
   // cielo en bandas
   for (int y = 0; y < HORIZON; y += 8)
@@ -2162,6 +2167,7 @@ void drawScene(uint8_t biome, uint32_t now, bool night) {
       for (int b = -1; b <= 1; b++)
         gfx->fillRect(gx + b * 5, HORIZON + 6, 2, 8 + (b == 0 ? 4 : 0), dk);
   }
+  rankSceneExtras(now, night);
 }
 
 // primera partida: elige inicial entre Bulbasaur / Charmander / Squirtle
@@ -4418,6 +4424,7 @@ void renderPlayer() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
   if (playerPage < GYM_REGIONS) renderPlayerBadges();
+  else if (playerPage == PLAYER_RANK_PAGE) rankRenderPage();
   else renderPlayerMedals();
 
   for (uint8_t i = 0; i < PLAYER_PAGES; i++) {
