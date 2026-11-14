@@ -304,6 +304,10 @@ bool spdNewHi = false;
 
 bool gymOpen = false;
 bool gymHard = false;   // which ladder the list is showing
+// REMATCH, the third setting of the difficulty pill once a region's champion
+// fell on easy (ui_tower.ino). Read through gymRematchOn(), which also checks
+// it is still unlocked for the ladder on screen.
+bool gymRematch = false;
 
 // LAN battle. `lanOpen` is the pairing screen; once both squads are known the
 // normal battle screen takes over with btlLink set.
@@ -336,12 +340,22 @@ static void drawBtlBack();
 static void btlLinkPoll();   // defined with the battle code, called from render()
 static void btlSwitchTo(uint8_t i);
 static void btlResolve(uint8_t yourMove);
+static void btlOpenTeamFight(const TrainerMon *team, uint8_t n, uint8_t iv, const char *name);
 // The peer's whole team, kept live. A trainer's replacements are built fresh
 // from TRAINERS[] because they only ever arrive once; a linked opponent can
 // switch OUT and back IN, so its creatures have to remember how battered they
 // are. Host side only -- the guest takes absolute health off the wire.
 Combatant btlFoeSquad[TRAINER_TEAM_MAX];
 uint8_t btlFoeSquadN = 0;
+// A trainer's team, held by the BATTLE: filled once when the fight starts and
+// read for every replacement and for the win check. Gym, rematch and tower
+// fights all go through it, so none of them looks at TRAINER_SETS mid-fight --
+// the region mix-up behind badge_region_test was exactly a fight re-reading a
+// roster it should already have had. 0 = a one-off foe with no replacements.
+TrainerMon btlFoeTeam[TRAINER_TEAM_MAX];
+uint8_t btlFoeTeamN = 0;
+uint8_t btlFoeIv = EASY_IV;
+const char *btlFoeName = "";
 uint8_t btlMyAct = 0;        // host: our own action, latched until theirs lands
 // Which ladder the gym screen and the current fight belong to. The battle keeps
 // its own copy so that leaving the gym list mid-fight cannot retarget the badge.
@@ -444,9 +458,12 @@ bool pickOpen = false;
 // past the roster, which is what a LAN battle wants -- two players who know
 // each other can bring what they like.
 #define PICK_LAN 0xFF
+// The tower's 3 vs 3 at level 50 (ui_tower.ino). Also not a trainer index.
+#define PICK_TOWER 0xFE
 static void lanOffer(bool host);
 uint8_t pickTrainer = 0;
 bool pickHard = false;
+bool pickRematch = false;   // pickTrainer is a REMATCH of that leader
 bool lanWantHost = true;   // which button opened the picker
 uint16_t squadMask = 0xFFFF;   // everything, until the player says otherwise
 uint8_t pickPage = 0;
@@ -1756,7 +1773,7 @@ void onTap(int16_t x, int16_t y) {
   }
   if (gymOpen) {
     if (y >= GYMDIF_Y && y <= GYMDIF_Y + GYMDIF_H) {   // the difficulty pill
-      gymHard = !gymHard;
+      gymCycleDifficulty();   // EASY -> HARD (-> REMATCH once unlocked)
       sfxPlay(SFX_TAP);
       return;
     }
@@ -1772,13 +1789,14 @@ void onTap(int16_t x, int16_t y) {
       if (idx >= TRAINER_COUNT) break;
       int ry = GYM_ROW_Y(i);
       if (x < 70 || x > 396 || y < ry || y > ry + 44) continue;
-      if (!gymUnlocked(idx, gymHard)) { sfxPlay(SFX_DENY); return; }
+      if (!gymRowOpen(idx)) { sfxPlay(SFX_DENY); return; }
       sfxPlay(SFX_TAP);
       gymOpen = false;
       pickTrainer = idx;
-      pickHard = gymHard;
+      pickRematch = gymRematchOn();
+      pickHard = gymHard && !pickRematch;
       pickPage = 0;
-      pickDefault(squadCap(idx, gymHard));
+      pickDefault(squadCap(idx, pickHard));
       pickOpen = true;
       return;
     }
@@ -3378,7 +3396,10 @@ static void foeFromSpecies(Combatant &c, int16_t dex, uint8_t lvl, uint8_t iv) {
 // leader's, so Brock is two-on-two. The caps are applied while BUILDING the
 // combatants, so nothing is ever written back to the stored creature, exactly
 // like ailments.
-static void buildSquad(uint8_t maxLvl, uint8_t maxCount, uint16_t mask) {
+//
+// `fixLvl` (the tower) sets every creature to exactly that level, raising as
+// well as capping -- again on the copy only.
+static void buildSquad(uint8_t maxLvl, uint8_t maxCount, uint16_t mask, uint8_t fixLvl = 0) {
   btlSquadN = 0;
   btlSquadAt = 0;
   btlPetIn = false;
@@ -3387,6 +3408,7 @@ static void buildSquad(uint8_t maxLvl, uint8_t maxCount, uint16_t mask) {
     Pet tmp = pet;                       // a copy: the real pet is untouched
     if (maxLvl && tmp.level() > maxLvl)
       tmp.ageMinutes = (uint32_t)(maxLvl - 1) * MINUTES_PER_LEVEL;
+    if (fixLvl) tmp.ageMinutes = (uint32_t)(fixLvl - 1) * MINUTES_PER_LEVEL;
     combatantFromPet(btlSquad[btlSquadN], tmp);
     btlSquad[btlSquadN++].holder = HOLDER_PET;   // a spent berry leaves THIS creature
     btlPetIn = true;      // the training reward goes to whoever fought for it
@@ -3395,6 +3417,7 @@ static void buildSquad(uint8_t maxLvl, uint8_t maxCount, uint16_t mask) {
     if (party.slots[i].empty() || !(mask & (1 << (i + 1)))) continue;
     PartyMon m = party.slots[i];
     if (maxLvl && m.level > maxLvl) m.level = maxLvl;
+    if (fixLvl) m.level = fixLvl;
     combatantFromParty(btlSquad[btlSquadN], m);
     btlSquad[btlSquadN++].holder = HOLDER_PARTY(i);
   }
@@ -3403,6 +3426,7 @@ static void buildSquad(uint8_t maxLvl, uint8_t maxCount, uint16_t mask) {
 
 // How many you may bring: the leader's own count in hard mode, six otherwise.
 uint8_t squadCap(uint8_t idx, bool hard) {
+  if (idx == PICK_TOWER) return TOWER_TEAM;
   if (idx >= TRAINER_COUNT) return TRAINER_TEAM_MAX;
   return hard ? TRAINERS[idx].count : TRAINER_TEAM_MAX;
 }
@@ -3426,6 +3450,7 @@ void startLinkBattle() {
   btlTrainer = -1;
   btlHard = false;
   btlFoeAt = 0;
+  btlFoeTeamN = 0;
   btlFoeSquadN = 0;
   for (uint8_t i = 0; i < lan.theirsN && i < TRAINER_TEAM_MAX; i++)
     linkMonTo(btlFoeSquad[btlFoeSquadN++], lan.theirs[i]);
@@ -3462,15 +3487,29 @@ void startTrainerBattle(uint8_t idx, bool hard) {
   // for exactly this but never assigned, so it stayed 0: every win outside
   // Kanto was credited to KANTO's badge at the same index (or to nothing, if
   // that Kanto badge was already held), the win screen showed Kanto's badge,
-  // and the leader's replacements came from Kanto's roster. From here on the
-  // fight reads only BTL_TRAINERS, never TRAINERS (which follows gymRegion).
+  // and the leader's replacements came from Kanto's roster. The team is copied
+  // from BTL_TRAINERS into the battle (btlFoeTeam) and never re-read; TRAINERS
+  // follows gymRegion and is not consulted again.
   btlRegion = gymRegion % GYM_REGIONS;
   btlKind = BK_GYM;
   btlTrainer = (int8_t)idx;
   btlHard = hard;
-  btlFoeAt = 0;
   const Trainer &t = BTL_TRAINERS[idx];
-  foeFromSpecies(btlFoe, t.team[0].dex, t.team[0].level, hard ? HARD_IV : EASY_IV);
+  btlOpenTeamFight(t.team, t.count, hard ? HARD_IV : EASY_IV, t.name);
+}
+
+// Starts a fight against `team`, which the battle copies and from then on owns.
+// The caller has already built the squad and set btlKind/btlTrainer/btlHard/
+// btlRegion. Shared by the gym ladder, rematches and the tower.
+static void btlOpenTeamFight(const TrainerMon *team, uint8_t n, uint8_t iv, const char *name) {
+  if (!n) return;
+  if (n > TRAINER_TEAM_MAX) n = TRAINER_TEAM_MAX;
+  for (uint8_t k = 0; k < n; k++) btlFoeTeam[k] = team[k];
+  btlFoeTeamN = n;
+  btlFoeIv = iv;
+  btlFoeName = name;
+  btlFoeAt = 0;
+  foeFromSpecies(btlFoe, btlFoeTeam[0].dex, btlFoeTeam[0].level, btlFoeIv);
   btlMsgCount = 0;
   btlOver = false;
   btlWon = false;
@@ -3499,6 +3538,7 @@ void startBattle(int16_t dex, uint8_t lvl) {
   // "enemy" maths that could quietly diverge.
   btlKind = BK_DEBUG;
   btlTrainer = -1;
+  btlFoeTeamN = 0;
   Pet foe;
   foe.dbgHatchAs(dex, false);
   foe.ivAtk = foe.ivDef = foe.ivSpe = foe.ivHp = 20;
@@ -3702,7 +3742,7 @@ static void btlResolve(uint8_t yourMove) {
     btlSwapWho = 1;
     return;
   }
-  if (btlFoe.fainted() && btlTrainer >= 0 && btlFoeAt + 1 < BTL_TRAINERS[btlTrainer].count) {
+  if (btlFoe.fainted() && !btlLink && btlFoeAt + 1 < btlFoeTeamN) {
     btlFaintUntil[1] = millis() + BTL_FAINT_MS;
     btlSwapWho = 1;
     return;
@@ -3721,7 +3761,10 @@ static void btlResolve(uint8_t yourMove) {
     btlWon = btlFoe.fainted();
     btlNewBadge = false;
     btlTrainGain = 0;
-    if (btlWon && btlTrainer >= 0 && !pet.hasBadge(btlRegion, btlTrainer, btlHard)) {
+    // BK_GYM only: a rematch reuses btlTrainer for the leader's name and the
+    // training reward, and must never touch a badge (rematch_ui_test).
+    if (btlWon && btlKind == BK_GYM && btlTrainer >= 0 &&
+        !pet.hasBadge(btlRegion, btlTrainer, btlHard)) {
       pet.winBadge(btlRegion, btlTrainer, btlHard);
       btlNewBadge = true;
     }
@@ -3872,8 +3915,11 @@ void renderWin() {
   gfx->setCursor(CX - (int)strlen(l) * 6, 96);
   gfx->print(l);
 
-  // the badge, large, with the hard-mode halo if that is how it was won
-  if (btlTrainer < TRAINER_GYMS) {
+  // the badge, large, with the hard-mode halo if that is how it was won. A
+  // rematch has no badge to show: it draws its own reward instead.
+  if (btlKind == BK_REMATCH) {
+    towerWinBody();
+  } else if (btlTrainer < TRAINER_GYMS) {
     int by = 190;
     if (btlHard) {
       for (int r = 62; r >= 56; r--) gfx->drawCircle(CX, by, r, r % 2 ? 0xFEA0 : 0xFF60);
@@ -3908,11 +3954,13 @@ void renderWin() {
       gfx->print(T(S_BTL_NEWBADGE));
     }
   }
-  snprintf(l, sizeof(l), T(S_BADGES_FMT), pet.badgeCountIn(btlRegion, btlHard));
-  gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(CX - (int)strlen(l) * 6, 316);
-  gfx->print(l);
+  if (btlKind != BK_REMATCH) {
+    snprintf(l, sizeof(l), T(S_BADGES_FMT), pet.badgeCountIn(btlRegion, btlHard));
+    gfx->setTextColor(UI_INK);
+    gfx->setTextSize(2);
+    gfx->setCursor(CX - (int)strlen(l) * 6, 316);
+    gfx->print(l);
+  }
 
   // what the win was worth beyond the badge
   if (btlTrainGain) {
@@ -4060,15 +4108,14 @@ static void btlDoSwap() {
     btlEnterUntil[1] = now + BTL_ENTER_MS;
     btlSay(T(S_BTL_SENDS), lan.peerName, btlFoe.name);
   } else if (btlSwapWho == 1) {
-    const Trainer &t = BTL_TRAINERS[btlTrainer];
+    if (btlFoeAt + 1 >= btlFoeTeamN) { btlSwapWho = -1; return; }
     btlFoeAt++;
-    foeFromSpecies(btlFoe, t.team[btlFoeAt].dex, t.team[btlFoeAt].level,
-                   btlHard ? HARD_IV : EASY_IV);
+    foeFromSpecies(btlFoe, btlFoeTeam[btlFoeAt].dex, btlFoeTeam[btlFoeAt].level, btlFoeIv);
     btlHpShown[1] = btlFoe.maxHp;
     btlSyncSprite(1, btlFoe);
     btlLungeUntil[1] = btlHitUntil[1] = btlFaintUntil[1] = 0;
     btlEnterUntil[1] = now + BTL_ENTER_MS;
-    btlSay(T(S_BTL_SENDS), t.name, btlFoe.name);
+    btlSay(T(S_BTL_SENDS), btlFoeName, btlFoe.name);
   } else if (btlSwapWho == 0) {
     btlSquad[btlSquadAt] = btlYou;     // remember how battered it was
     btlSquadAt++;
@@ -4526,6 +4573,7 @@ static void drawPickCell(uint8_t n, int x, int y, uint8_t capLvl) {
     nm = m.nick[0] ? m.nick : DEX_TBL[dex].name;
   }
   if (capLvl && lvl > capLvl) lvl = capLvl;   // show the level it will FIGHT at
+  if (pickTrainer == PICK_TOWER) lvl = TOWER_LEVEL;   // raised as well as capped
   gfx->fillRoundRect(x, y, PICK_CELL_W, PICK_CELL_H, 10, on ? UI_BG_DAY : UI_TRACK);
   gfx->drawRoundRect(x, y, PICK_CELL_W, PICK_CELL_H, 10, on ? UI_INK : 0x8410);
   const uint8_t *th = thumbs.get(dex);
@@ -4564,6 +4612,8 @@ void renderPick() {
   if (pickTrainer == PICK_LAN) {
     snprintf(head, sizeof(head), "%s: %s", T(S_LAN),
              lanWantHost ? T(S_LAN_HOST) : T(S_LAN_JOIN));
+  } else if (pickTrainer == PICK_TOWER || pickRematch) {
+    top = pickFoeHeader(head, sizeof(head));   // ui_tower.ino
   } else {
     const Trainer &t = TRAINERS[pickTrainer];
     for (int k = 0; k < t.count; k++)
@@ -4622,6 +4672,7 @@ void pickTap(int16_t x, int16_t y) {
     sfxPlay(SFX_TAP);
     pickOpen = false;
     if (pickTrainer == PICK_LAN) { lanOpen = true; }
+    else if (pickTrainer == PICK_TOWER) { /* the tower screen is still up */ }
     else { gymOpen = true; }
     return;
   }
@@ -4640,6 +4691,8 @@ void pickTap(int16_t x, int16_t y) {
       lanOpen = true;
       return;
     }
+    if (pickTrainer == PICK_TOWER) { towerPickFight(); return; }   // ui_tower.ino
+    if (pickRematch) { rematchStartBattle(pickTrainer); return; }
     startTrainerBattle(pickTrainer, pickHard);
     return;
   }
@@ -4823,12 +4876,13 @@ void renderGyms() {
   // from, so it was both redundant and in the way.
   // difficulty pill: hard caps YOUR team to the leader's size and level, so it
   // is a different ladder with its own badges rather than a damage multiplier
-  const char *dif = T(gymHard ? S_HARD : S_EASY);
+  bool rm = gymRematchOn();
+  const char *dif = rm ? rematchPillLabel() : T(gymHard ? S_HARD : S_EASY);
   int dw = (int)strlen(dif) * 12 + 48;      // wider as well as taller
   if (dw < 120) dw = 120;
   gfx->fillRoundRect(CX - dw / 2, GYMDIF_Y, dw, GYMDIF_H, 12,
-                     gymHard ? UI_BAR_BAD : UI_TRACK);
-  gfx->setTextColor(gymHard ? UI_BG_DAY : UI_INK);
+                     rm ? UI_BAR_OK : gymHard ? UI_BAR_BAD : UI_TRACK);
+  gfx->setTextColor(rm || gymHard ? UI_BG_DAY : UI_INK);
   gfx->setTextSize(2);
   gfx->setCursor(CX - (int)strlen(dif) * 6, GYMDIF_Y + 14);
   gfx->print(dif);
@@ -4838,8 +4892,8 @@ void renderGyms() {
     if (idx >= TRAINER_COUNT) break;
     const Trainer &t = TRAINERS[idx];
     int y = GYM_ROW_Y(i);
-    bool done = pet.hasBadge(gymRegion, idx, gymHard);
-    bool open_ = gymUnlocked(idx, gymHard);
+    bool done = gymRowDone(idx);
+    bool open_ = gymRowOpen(idx);
     gfx->fillRoundRect(70, y, 326, 44, 10, done ? UI_TRACK : UI_BG_DAY);
     gfx->drawRoundRect(70, y, 326, 44, 10, open_ ? UI_INK : UI_TRACK);
     gfx->setTextColor(open_ ? UI_INK : UI_TRACK);
@@ -4851,11 +4905,10 @@ void renderGyms() {
     gfx->setCursor(84, y + 28);
     gfx->print(open_ ? t.place : T(S_LOCKED));
     // the level of the strongest creature: the honest measure of the wall
-    uint8_t top = 0;
-    for (int k = 0; k < t.count; k++)
-      if (t.team[k].level > top) top = t.team[k].level;
+    uint8_t cnt = t.count;
+    uint8_t top = gymRowTop(idx, &cnt);
     char lv[16];
-    snprintf(lv, sizeof(lv), "Lv.%u x%u", top, t.count);
+    snprintf(lv, sizeof(lv), "Lv.%u x%u", top, cnt);
     gfx->setTextColor(done ? UI_BAR_OK : (open_ ? UI_INK : UI_TRACK));
     gfx->setCursor(384 - (int)strlen(lv) * 6, y + 28);
     gfx->print(lv);

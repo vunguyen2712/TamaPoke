@@ -6,6 +6,7 @@
 #include "trainers.h"
 #include "game_events.h"
 #include "breed.h"
+#include "tower.h"
 
 // ---------- the tables ----------
 //
@@ -125,26 +126,18 @@ static void load() {
 
 // ---------- what this player can do ----------
 
-// Weak: the tower feature defines the real one. Until then the tower opens
-// with any region's champion beaten -- the last badge of a ladder.
-__attribute__((weak)) bool towerUnlocked() {
-  if (!gPet) return false;
-  for (uint8_t r = 0; r < GYM_REGIONS; r++)
-    if (gPet->hasBadge(r, TRAINER_COUNT - 1, false)) return true;
-  return false;
-}
-
-// Levels until the next evolution, or -1 if this creature will never evolve.
-// Same threshold canEvolveNow() uses -- careMistakes and the retire penalty
-// both move it -- so the task can never promise what the card would not.
+// Levels until the next evolution, or -1 if this creature will never evolve
+// (or cannot without something the task cannot promise, like a bond it lacks).
+// Asks evoCheck() -- the one rule canEvolveNow(), evolve() and the card use --
+// so the task can never promise what the card would not.
 static int levelsToEvolve(const Pet &p) {
-  if (p.frozen || p.isEgg() || p.speciesId > DEX_COUNT) return -1;
-  const DexEntry &d = DEX_TBL[p.speciesId];
-  if (d.evolvesTo == 0) return -1;
-  int need = (int)d.evolveLevel + p.careMistakes + p.evoPenalty();
-  if (need > MAX_LEVEL) return -1;
+  if (p.frozen) return -1;
+  EvoCheck e = evoCheck(p);
+  if (e.block == EVO_FINAL || e.block == EVO_NO_ART) return -1;
+  if (e.friendship && p.bond < FRIEND_BOND) return -1;   // a bond is days, not levels
+  if (e.needLevel > MAX_LEVEL) return -1;
   int lv = p.level();
-  return need > lv ? need - lv : 0;
+  return (int)e.needLevel > lv ? (int)e.needLevel - lv : 0;
 }
 
 TaskWorld taskWorldOf(const Pet &p) {
@@ -158,13 +151,19 @@ TaskWorld taskWorldOf(const Pet &p) {
   int lv = levelsToEvolve(p);
   w.evolveToday = lv >= 0 && lv <= 12;
   w.evolveWeek = lv >= 0 && (uint32_t)lv <= daysLeft * 12;
-  w.dexNewWeek = w.evolveWeek && !p.isRegistered(DEX_TBL[p.speciesId].evolvesTo);
+  {
+    EvoCheck e = evoCheck(p);
+    int16_t into = e.target ? e.target : (int16_t)DEX_TBL[p.speciesId].evolvesTo;
+    w.dexNewWeek = w.evolveWeek && !p.isRegistered(into);
+  }
   for (uint8_t r = 0; r < GYM_REGIONS && !w.gymsLeft; r++) {
     if (!regionAvailable(r)) continue;
     for (uint8_t i = 0; i < TRAINER_COUNT; i++)
       if (!p.hasBadge(r, i, false)) { w.gymsLeft = true; break; }
   }
-  w.towerOpen = towerUnlocked();
+  w.towerOpen = towerUnlockedFor(p);
+  for (uint8_t r = 0; r < GYM_REGIONS && !w.rematchOpen; r++)
+    if (regionAvailable(r) && rematchUnlockedFor(p, r)) w.rematchOpen = true;
   for (uint8_t i = 1; i < ITEM_COUNT; i++) {
     if (!bag.count(i)) continue;
     if (itemIsBall(i)) w.hasBall = true;
@@ -187,7 +186,7 @@ bool taskPossible(uint8_t kind, bool weekly, const TaskWorld &w) {
     case TK_EVOLVE:      return weekly ? w.evolveWeek : w.evolveToday;
     case TK_DEX_NEW:     return w.dexNewWeek;
     case TK_GYM_WIN:     return w.gymsLeft;
-    case TK_REMATCH_WIN: return w.towerOpen;
+    case TK_REMATCH_WIN: return w.rematchOpen;
     case TK_TOWER_WIN:   return w.towerOpen;
     case TK_WILD_CATCH:  return w.hasBall;
     case TK_ITEM_USED:   return w.hasHeld;

@@ -68,7 +68,8 @@ struct TaskWorld {
   bool evolveWeek;    // ... or within what is left of the week
   bool dexNewWeek;    // that evolution would register a new species
   bool gymsLeft;      // some available ladder still has an unearned (easy) badge
-  bool towerOpen;     // towerUnlocked(): tower floors and gym rematches
+  bool towerOpen;     // towerUnlockedFor(): tower floors
+  bool rematchOpen;   // rematchUnlockedFor() in some playable region
   bool hasBall;       // a ball in the bag (a catch needs one)
   bool hasHeld;       // a held item in the bag (an item can be used up)
   bool canBreed;      // two banked creatures for the daycare

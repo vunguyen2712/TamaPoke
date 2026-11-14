@@ -484,7 +484,41 @@ reboot -- starts the hour over. Design notes: `docs/adventure-tasks.md`.
 
 #### Battle Tower and gym rematches
 
-(to be written by the tower feature)
+**Battle Tower** (ADVENTURE -> TOWER). Opens once you have beaten **any region's
+champion on either difficulty**; until then the hub row is greyed and says so.
+
+| rule | value |
+|---|---|
+| format | single battles, **3 vs 3**, you pick your three with the usual team picker |
+| levels | **everyone fights at 50** -- your team is capped OR raised to 50 for the fight; the stored creatures are never changed |
+| a run | the streak continues fight after fight and is saved; a **loss or RUN ends it**. Best streak is kept |
+| opponents | 3 distinct species, drawable (art + the region's pack on the card), at level 50 |
+| strength | base-stat-total band centred on `380 + 10 x (floor-1)`, capped at 600, +-50 (floor 1: 330-430, floor 8: 400-500, floor 23+: 550-650) |
+| IVs | 16 on floor 1, rising linearly to 31 on floor 15 and after |
+| AI | random until floor 6, the hard-mode AI from **floor 7** |
+| legendaries | none before **floor 22** (Ultra Beasts count as legendary) |
+| rewards | at every **7th** straight win: 3 ULTRA BALL + 2 berries (SITRUS, then LUM, alternating); every **14th** also a held item, cycling LEFTOVERS -> FOCUS SASH -> QUICK CLAW |
+
+A floor's team is fixed for the run (the screen shows who is waiting before you
+press START/CONTINUE, and that is who you fight); a lost run re-rolls the tower
+for the next one. Measured mean base-stat total of the opponents: ~392 on floors
+1-3, ~485 on 10-12, ~585 on 25-27.
+
+**Gym rematches** (the gym list's difficulty pill). Once a region's champion is
+beaten on **EASY**, its pill cycles EASY -> HARD -> **REMATCH**. Every trainer of
+that ladder returns stronger:
+
+| rule | value |
+|---|---|
+| levels | `level x 5/4 + 10`, capped at 100 (Brock 12/14 -> 25/27, Lance 60 -> 85, a level-72 ace -> 100) |
+| team | each creature evolves as far as its new level allows (only into drawable forms), then the team is **filled to six** with creatures of the leader's type -- drawable, never legendary, at the team's lowest raised level, the ace still last |
+| order | sequential, like the ladder: each rematch opens once the previous one is won |
+| your side | up to six, level capped to the rematch leader's best (same rule as the ladder) |
+| IVs / AI | 24 / the easy AI -- the levels are the difficulty |
+| reward | the usual training reward, plus an item: ORAN BERRY (gym leaders), SITRUS BERRY (Elite 4), LUM BERRY (champion) every win; the FIRST win of each also gives 2 ULTRA BALL (leaders), 3 ULTRA BALL (Elite 4) or LEFTOVERS (champion) |
+
+A rematch win is recorded in its own per-region mask and **never grants or
+removes a badge**.
 
 &nbsp;
 
