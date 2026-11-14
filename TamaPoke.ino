@@ -36,7 +36,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "3.11"
+#define FW_VERSION "3.12"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -3379,10 +3379,17 @@ void startTrainerBattle(uint8_t idx, bool hard) {
   // size cap on top, plus a smarter AI and better opposing IVs.
   buildSquad(top, hard ? tr.count : TRAINER_TEAM_MAX, squadMask);
   if (!btlSquadN) return;
+  // Pin the fight to the ladder it was started from. btlRegion was declared
+  // for exactly this but never assigned, so it stayed 0: every win outside
+  // Kanto was credited to KANTO's badge at the same index (or to nothing, if
+  // that Kanto badge was already held), the win screen showed Kanto's badge,
+  // and the leader's replacements came from Kanto's roster. From here on the
+  // fight reads only BTL_TRAINERS, never TRAINERS (which follows gymRegion).
+  btlRegion = gymRegion % GYM_REGIONS;
   btlTrainer = (int8_t)idx;
   btlHard = hard;
   btlFoeAt = 0;
-  const Trainer &t = TRAINERS[idx];
+  const Trainer &t = BTL_TRAINERS[idx];
   foeFromSpecies(btlFoe, t.team[0].dex, t.team[0].level, hard ? HARD_IV : EASY_IV);
   btlMsgCount = 0;
   btlOver = false;
@@ -3610,7 +3617,11 @@ static void btlResolve(uint8_t yourMove) {
     btlSwapWho = 1;
     return;
   }
-  if (btlYou.fainted() && btlSquadAt + 1 < btlSquadN) {
+  // Past the two checks above, a fainted foe has nobody left. A double KO on
+  // that turn (recoil, poison, burn) is a WIN now: it used to send in your next
+  // creature against an empty field, play a dead turn, and only then award the
+  // badge -- and leaving during that turn forfeited it.
+  if (btlYou.fainted() && !btlFoe.fainted() && btlSquadAt + 1 < btlSquadN) {
     btlFaintUntil[0] = millis() + BTL_FAINT_MS;
     btlSwapWho = 0;
     return;
