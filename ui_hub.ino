@@ -288,6 +288,7 @@ void featSceneOverlay() {
 // Last, above everything but the menu: badges and notices.
 void featMainOverlay() {
   wildMainBadge();
+  rankMainNotice();   // RANK UP!, once, after a rank-up (ui_rank.ino)
 }
 
 // A tap on the main screen, before the menu band and the pet. True = consumed.
