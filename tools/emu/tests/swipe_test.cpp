@@ -55,6 +55,10 @@ static void check(const char *name, bool *open, uint8_t *page){
   printf("PASS  %-10s pages on a horizontal swipe\n", name);
 }
 uint8_t learnableFor(int16_t dex, uint8_t lvl, uint8_t *out, uint8_t max);
+// Adventure screens (ui_*.ino) that page
+#include "items.h"
+extern bool hubOpen, tasksOpen, bagOpen;
+extern uint8_t tasksPage, bagPage;
 
 int main(){
   setup();
@@ -292,6 +296,15 @@ int main(){
       printf("FAIL  picker     TMs never arrive at all\n"); bad++;
     } else printf("PASS  picker     and the TMs arrive once it is built\n");
   }
+
+  // ---- the Adventure screens. Each feature's own ui test pages them too;
+  // they are here as well so no paged screen is ever missing from this list.
+  hubOpen = false;
+  clearAll(); tasksOpen=true;                     check("tasks",    &tasksOpen,    &tasksPage);
+  tasksOpen = false;
+  for (uint8_t i = 1; i < ITEM_COUNT; i++) bag.add(i, 3);   // enough rows for a second page
+  clearAll(); bagOpen=true;                       check("bag",      &bagOpen,      &bagPage);
+  bagOpen = false;
 
   printf("%s\n", bad?"FAILURES":"every paged screen pages");
   return bad?1:0;
