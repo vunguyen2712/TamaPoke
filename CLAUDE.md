@@ -263,6 +263,15 @@ HABITAT list, header-only `habitat.h` reading wild.cpp), `adventure-persona.md`
 (traits; banked ones live in `PartyMon::spare`), `adventure-friends.md`
 (gift swap two-phase commit, visits; LINK_PROTO 3 -- older boards refuse).
 
+**Move effects (v3.16)** live in `ui_movefx.ino`. `moveFxShape()` is the one
+answer to "what a move looks like". `btlFxQueue()` lays each action of a turn on
+ONE timeline: it schedules the lunge, the flinch (`btlHitFrom`/`btlHitUntil`), the
+HP-bar hold (`btlHpHoldUntil`) and returns when the next action may start.
+Faints and the win screen (`btlWinFrom`) wait for `btlFxEnd()`. Any new place that
+deals damage in a fight must go through it, or its hit lands before its effect.
+`genproto.py` includes `battle.h` because `btlFxQueue` takes a `TurnLog`.
+`movefx_ui_test` covers it.
+
 `tests/run.sh` no longer needs SDL (only the clickable emulator does);
 `SKIP_FW=1` skips its arduino-cli step.
 

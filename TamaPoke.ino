@@ -46,7 +46,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "3.15"
+#define FW_VERSION "3.16"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -302,6 +302,7 @@ bool btlOver = false;
 bool btlWon = false;
 bool btlNewBadge = false;
 uint32_t btlWinUntil = 0;   // the win screen is up
+uint32_t btlWinFrom = 0;    // ...from here: the final blow plays out first
 // A trainer fight is a run of 1v1s: both sides queue their squad and the next
 // one steps up when the current one faints. This is the whole difficulty curve
 // -- no gating, just attrition, so one strong creature sweeps Brock and dies
@@ -523,6 +524,12 @@ uint8_t btlFoeAt = 0;
 uint32_t btlLungeUntil[2] = { 0, 0 };   // acted: leans toward the opponent
 uint32_t btlHitUntil[2] = { 0, 0 };     // was hit: jitters and flashes
 uint16_t btlHpShown[2] = { 0, 0 };      // bars ease toward the real value
+// When the two timers above START. A turn is laid out on one timeline
+// (ui_movefx.ino), so a hit is scheduled for the moment its effect lands rather
+// than the moment the turn resolved; the HP bar holds still until then too.
+uint32_t btlLungeFrom[2] = { 0, 0 };
+uint32_t btlHitFrom[2] = { 0, 0 };
+uint32_t btlHpHoldUntil[2] = { 0, 0 };
 // Two streamed sprites, so the creatures can actually swing and flinch. They
 // cost ~135 KB of PSRAM each on average and are freed when the fight ends. The
 // player's side is NOT the global `pmd`: the active creature may be a banked
@@ -902,7 +909,9 @@ void loop() {
   // 85 ms en juego/saco: margen seguro para que el redibujado no pise el envio
   // DMA del frame anterior (a 40-65 ms solapaba y causaba flashes negros; con
   // sprites grandes el dibujo tarda mas, asi que se deja colchon)
-  if (now - lastRender >= (uint32_t)((gameOpen || sackOpen || spdOpen) ? 85 : 100)) {
+  // A move effect playing gets the minigames' faster frame rate too.
+  if (now - lastRender >= (uint32_t)((gameOpen || sackOpen || spdOpen ||
+                                     (battleOpen && btlFxActive())) ? 85 : 100)) {
     lastRender = now;
     render();
   }
@@ -2229,7 +2238,8 @@ uint8_t uiCurrentScreen() {
   if (cardOpen) return SCR_CARD;
   if (playerOpen) return SCR_PLAYER;
   if (clockOpen) return SCR_CLOCK;
-  if (btlWinUntil) return SCR_WIN;
+  // only once it is on the panel: the final blow plays on the battle screen first
+  if (btlWinUntil && (int32_t)(millis() - btlWinFrom) >= 0) return SCR_WIN;
   if (battleOpen) return SCR_BATTLE;
   if (pickOpen) return SCR_PICK;
   if (lanOpen) return SCR_LAN;
@@ -3565,6 +3575,7 @@ static void btlOpenTeamFight(const TrainerMon *team, uint8_t n, uint8_t iv, cons
   audioMusic(MUS_BATTLE);
   btlLungeUntil[0] = btlLungeUntil[1] = 0;
   btlHitUntil[0] = btlHitUntil[1] = 0;
+  btlFxReset();
   battleOpen = true;
 }
 
@@ -3601,6 +3612,7 @@ void startBattle(int16_t dex, uint8_t lvl) {
   audioMusic(MUS_BATTLE);
   btlLungeUntil[0] = btlLungeUntil[1] = 0;
   btlHitUntil[0] = btlHitUntil[1] = 0;
+  btlFxReset();
   battleOpen = true;
 }
 
@@ -3621,7 +3633,7 @@ static void btlApplyResult() {
     btlSquadAt = r.guestIdx;
     btlYou = btlSquad[btlSquadAt];
     btlSyncSprite(0, btlYou);
-    btlLungeUntil[0] = btlHitUntil[0] = btlFaintUntil[0] = 0;
+    btlLungeUntil[0] = btlHitUntil[0] = btlFaintUntil[0] = 0; btlFxClearSide(0);
     btlEnterUntil[0] = now + BTL_ENTER_MS;
   }
   if (r.hostIdx != btlFoeAt && r.hostIdx < lan.theirsN) {
@@ -3629,7 +3641,7 @@ static void btlApplyResult() {
     linkMonTo(btlFoe, lan.theirs[btlFoeAt]);
     btlHpShown[1] = btlFoe.maxHp;
     btlSyncSprite(1, btlFoe);
-    btlLungeUntil[1] = btlHitUntil[1] = btlFaintUntil[1] = 0;
+    btlLungeUntil[1] = btlHitUntil[1] = btlFaintUntil[1] = 0; btlFxClearSide(1);
     btlEnterUntil[1] = now + BTL_ENTER_MS;
   }
   btlYou.hp = r.guestHp > btlYou.maxHp ? btlYou.maxHp : r.guestHp;
@@ -3640,14 +3652,22 @@ static void btlApplyResult() {
   btlMsgCount = 0;
   if (r.hostMove) btlSay(T(S_BTL_USED), btlFoe.name, MOVE_TBL[r.hostMove].name);
   if (r.guestMove) btlSay(T(S_BTL_USED), btlYou.name, MOVE_TBL[r.guestMove].name);
-  if (r.guestDmg) { btlHitUntil[0] = now + BTL_HIT_MS; sfxPlay(SFX_HIT); }
-  if (r.hostDmg) { btlHitUntil[1] = now + BTL_HIT_MS; sfxPlay(SFX_HIT); }
+  // The guest has no TurnLog, only who was hurt: enough to play both effects.
+  {
+    TurnLog g;
+    uint32_t at = now;
+    if (r.hostMove) { g.damage = r.guestDmg; at = btlFxQueue(1, r.hostMove, g, at, r.guestDmg > 0, false); }
+    g = TurnLog();
+    if (r.guestMove) { g.damage = r.hostDmg; at = btlFxQueue(0, r.guestMove, g, at, r.hostDmg > 0, false); }
+  }
+  if (r.guestDmg) sfxPlay(SFX_HIT);
+  if (r.hostDmg) sfxPlay(SFX_HIT);
   if (btlYou.fainted()) {
-    btlFaintUntil[0] = now + BTL_FAINT_MS;
+    btlFaintUntil[0] = btlFxEnd() + BTL_FAINT_MS;
     btlSay(T(S_BTL_FAINT), btlYou.name);
   }
   if (btlFoe.fainted()) {
-    btlFaintUntil[1] = now + BTL_FAINT_MS;
+    btlFaintUntil[1] = btlFxEnd() + BTL_FAINT_MS;
     btlSay(T(S_BTL_FAINT), btlFoe.name);
   }
 }
@@ -3726,7 +3746,7 @@ static void btlResolve(uint8_t yourMove) {
         btlFoe = btlFoeSquad[to];
         btlHpShown[1] = btlFoe.hp;
         btlSyncSprite(1, btlFoe);
-        btlLungeUntil[1] = btlHitUntil[1] = btlFaintUntil[1] = 0;
+        btlLungeUntil[1] = btlHitUntil[1] = btlFaintUntil[1] = 0; btlFxClearSide(1);
         btlEnterUntil[1] = now + BTL_ENTER_MS;
         btlSay(T(S_BTL_SENDS), lan.peerName, btlFoe.name);
         foeSwitched = true;
@@ -3756,24 +3776,32 @@ static void btlResolve(uint8_t yourMove) {
   uint8_t mb = youFirst ? foeMove : yourMove;
 
   uint16_t hp0You = btlYou.hp, hp0Foe = btlFoe.hp;
-  battleAct(*a, *b, ma, lg);
-  btlNarrate(*a, *b, lg);
-  if (lg.damage && !lg.hurtSelf) btlLungeUntil[a == &btlYou ? 0 : 1] = now + BTL_LUNGE_MS;
+  // One timeline for the turn: each action's effect plays, THEN the next one
+  // starts, and whoever loses health flinches when the blow lands
+  // (ui_movefx.ino). Who was hurt is measured here, around each action.
+  uint32_t at = now;
+  {
+    uint16_t ha = a->hp, hb = b->hp;
+    battleAct(*a, *b, ma, lg);
+    btlNarrate(*a, *b, lg);
+    at = btlFxQueue(a == &btlYou ? 0 : 1, ma, lg, at, b->hp < hb, a->hp < ha);
+  }
   if (!b->fainted()) {
+    uint16_t ha = a->hp, hb = b->hp;
     battleAct(*b, *a, mb, lg);
     btlNarrate(*b, *a, lg);
-    if (lg.damage && !lg.hurtSelf)
-      btlLungeUntil[b == &btlYou ? 0 : 1] = now + BTL_LUNGE_MS + BTL_LUNGE_MS;
+    at = btlFxQueue(b == &btlYou ? 0 : 1, mb, lg, at, a->hp < ha, b->hp < hb);
   }
-  // whoever actually lost health flinches, whichever side dealt it
-  if (btlYou.hp < hp0You) btlHitUntil[0] = now + BTL_HIT_MS;
-  if (btlFoe.hp < hp0Foe) btlHitUntil[1] = now + BTL_HIT_MS;
   if (btlLink && btlLinkHost) btlShipResult(yourMove, foeMove, hp0You, hp0Foe);
   if (!btlYou.fainted() && !btlFoe.fainted()) {
+    uint16_t h0 = btlYou.hp, h1 = btlFoe.hp;
     battleEndTurn(btlYou, lg);
     if (lg.damage || lg.atkItem) btlNarrate(btlYou, btlYou, lg);
     battleEndTurn(btlFoe, lg);
     if (lg.damage || lg.atkItem) btlNarrate(btlFoe, btlFoe, lg);
+    // poison and burn bite once the moves have played out
+    if (btlYou.hp < h0) { btlHitFrom[0] = at; btlHitUntil[0] = at + BTL_HIT_MS; btlHpHoldUntil[0] = at; }
+    if (btlFoe.hp < h1) { btlHitFrom[1] = at; btlHitUntil[1] = at + BTL_HIT_MS; btlHpHoldUntil[1] = at; }
   }
   // A berry or sash spent this turn is gone from the creature that held it,
   // NOW -- not at the end, which a fight has too many ways of reaching.
@@ -3782,12 +3810,12 @@ static void btlResolve(uint8_t yourMove) {
   // change instant and read as a jump cut. Flag it, let the sprite drop out of
   // frame, and swap when the player dismisses the message.
   if (btlFoe.fainted() && btlLink && btlFoeAt + 1 < btlFoeSquadN) {
-    btlFaintUntil[1] = millis() + BTL_FAINT_MS;
+    btlFaintUntil[1] = btlFxEnd() + BTL_FAINT_MS;
     btlSwapWho = 1;
     return;
   }
   if (btlFoe.fainted() && !btlLink && btlFoeAt + 1 < btlFoeTeamN) {
-    btlFaintUntil[1] = millis() + BTL_FAINT_MS;
+    btlFaintUntil[1] = btlFxEnd() + BTL_FAINT_MS;
     btlSwapWho = 1;
     return;
   }
@@ -3796,12 +3824,17 @@ static void btlResolve(uint8_t yourMove) {
   // creature against an empty field, play a dead turn, and only then award the
   // badge -- and leaving during that turn forfeited it.
   if (btlYou.fainted() && !btlFoe.fainted() && btlSquadAt + 1 < btlSquadN) {
-    btlFaintUntil[0] = millis() + BTL_FAINT_MS;
+    btlFaintUntil[0] = btlFxEnd() + BTL_FAINT_MS;
     btlSwapWho = 0;
     return;
   }
   if (btlFoe.fainted() || btlYou.fainted()) {
     btlOver = true;
+    // the last blow plays, then whoever went down sinks out of frame
+    uint32_t down = btlFxEnd() + BTL_FAINT_MS;
+    if (btlFoe.fainted()) btlFaintUntil[1] = down;
+    if (btlYou.fainted()) btlFaintUntil[0] = down;
+    btlWinFrom = down;
     btlWon = btlFoe.fainted();
     btlNewBadge = false;
     btlTrainGain = 0;
@@ -3886,6 +3919,7 @@ static void btlSide(int tx, int ty, int sx, int sy, const Combatant &c, uint8_t 
   bool flash = false;
   if (now < btlFaintUntil[who]) {          // sinks out of frame as it faints
     uint32_t left = btlFaintUntil[who] - now;
+    if (left > BTL_FAINT_MS) left = BTL_FAINT_MS;   // still waiting for the blow
     oy += (int)((BTL_FAINT_MS - left) * 70 / BTL_FAINT_MS);
   } else if (c.fainted() && btlSwapWho == (int8_t)who) {
     return;                                // gone, waiting to be replaced
@@ -3894,16 +3928,20 @@ static void btlSide(int tx, int ty, int sx, int sy, const Combatant &c, uint8_t 
     uint32_t left = btlEnterUntil[who] - now;
     oy += (int)(left * 70 / BTL_ENTER_MS);
   }
-  if (now < btlLungeUntil[who]) {          // lean in, then back out
+  bool lunging = now >= btlLungeFrom[who] && now < btlLungeUntil[who];
+  bool hurting = now >= btlHitFrom[who] && now < btlHitUntil[who];
+  if (lunging) {                           // lean in, then back out
     uint32_t left = btlLungeUntil[who] - now;
+    if (left > BTL_LUNGE_MS) left = BTL_LUNGE_MS;
     int amt = (int)(left > BTL_LUNGE_MS / 2 ? BTL_LUNGE_MS - left : left) * 22 / (BTL_LUNGE_MS / 2);
     ox = who == 0 ? amt : -amt;            // you lunge right, the foe lunges left
     oy = who == 0 ? -amt / 2 : amt / 2;
   }
-  if (now < btlHitUntil[who]) {
+  if (hurting) {
     uint32_t left = btlHitUntil[who] - now;
     ox += ((left / 50) % 2) ? 5 : -5;      // jitter
   }
+  btlFxShake(who, ox, oy);                 // quakes and super effective knocks
 
   // Real PMD playback when the sprite streamed: attack while lunging, hurt
   // while flinching, idle otherwise. `has()` guards every one, because not
@@ -3913,17 +3951,17 @@ static void btlSide(int tx, int ty, int sx, int sy, const Combatant &c, uint8_t 
     uint8_t act = PMD_IDLE;
     bool loop = true;
     uint32_t t = now;
-    if (now < btlHitUntil[who] && btlPmd[who].has(PMD_HURT)) {
-      act = PMD_HURT; loop = false; t = now - (btlHitUntil[who] - BTL_HIT_MS);
-    } else if (now < btlLungeUntil[who] && btlPmd[who].has(PMD_ATTACK)) {
-      act = PMD_ATTACK; loop = false; t = now - (btlLungeUntil[who] - BTL_LUNGE_MS);
+    if (hurting && btlPmd[who].has(PMD_HURT)) {
+      act = PMD_HURT; loop = false; t = now - btlHitFrom[who];
+    } else if (lunging && btlPmd[who].has(PMD_ATTACK)) {
+      act = PMD_ATTACK; loop = false; t = now - btlLungeFrom[who];
     }
     drawPmdActM(btlPmd[who], act, sx + 24 + ox, sy + 78 + oy, t, loop, false, 4);
     return;
   }
   const uint8_t *th = thumbs.get(c.dex);
   if (!th) return;
-  if (now < btlHitUntil[who]) flash = ((btlHitUntil[who] - now) / 60) % 2 == 0;
+  if (hurting) flash = ((btlHitUntil[who] - now) / 60) % 2 == 0;
   drawThumb(th, sx + ox, sy + oy, 3, flash);
 }
 
@@ -3931,7 +3969,9 @@ static void btlSide(int tx, int ty, int sx, int sy, const Combatant &c, uint8_t 
 // visible as it happens, not as a value that was already different.
 static void btlEaseBars() {
   const uint16_t real[2] = { btlYou.hp, btlFoe.hp };
+  uint32_t now = millis();
   for (int i = 0; i < 2; i++) {
+    if (now < btlHpHoldUntil[i]) continue;   // the blow has not landed yet
     int diff = (int)real[i] - (int)btlHpShown[i];
     if (!diff) continue;
     int step = diff / 5;
@@ -4030,7 +4070,7 @@ void renderWin() {
 }
 
 void renderBattle() {
-  if (btlWinUntil) { renderWin(); return; }
+  if (btlWinUntil && (int32_t)(millis() - btlWinFrom) >= 0) { renderWin(); return; }
   btlEaseBars();
   gfx->fillScreen(RGB565_BLACK);
   drawBattleBack();
@@ -4042,6 +4082,7 @@ void renderBattle() {
   // name like BLASTOISE was losing its first characters off the edge
   btlSide(82, 82, 300, 40, btlFoe, 1);    // foe reads top-left, sprite top-right
   btlSide(250, 190, 76, 168, btlYou, 0);  // you read bottom-right, sprite bottom-left
+  btlFxDraw();                            // the moves themselves, over both
 
   // Waiting on the other device. Without this the screen is identical to the
   // one where it is your turn, so a tap that has been sent and a tap that was
@@ -4148,7 +4189,7 @@ static void btlDoSwap() {
     btlFoe = btlFoeSquad[btlFoeAt];
     btlHpShown[1] = btlFoe.hp;
     btlSyncSprite(1, btlFoe);
-    btlLungeUntil[1] = btlHitUntil[1] = btlFaintUntil[1] = 0;
+    btlLungeUntil[1] = btlHitUntil[1] = btlFaintUntil[1] = 0; btlFxClearSide(1);
     btlEnterUntil[1] = now + BTL_ENTER_MS;
     btlSay(T(S_BTL_SENDS), lan.peerName, btlFoe.name);
   } else if (btlSwapWho == 1) {
@@ -4157,7 +4198,7 @@ static void btlDoSwap() {
     foeFromSpecies(btlFoe, btlFoeTeam[btlFoeAt].dex, btlFoeTeam[btlFoeAt].level, btlFoeIv);
     btlHpShown[1] = btlFoe.maxHp;
     btlSyncSprite(1, btlFoe);
-    btlLungeUntil[1] = btlHitUntil[1] = btlFaintUntil[1] = 0;
+    btlLungeUntil[1] = btlHitUntil[1] = btlFaintUntil[1] = 0; btlFxClearSide(1);
     btlEnterUntil[1] = now + BTL_ENTER_MS;
     btlSay(T(S_BTL_SENDS), btlFoeName, btlFoe.name);
   } else if (btlSwapWho == 0) {
@@ -4166,7 +4207,7 @@ static void btlDoSwap() {
     btlYou = btlSquad[btlSquadAt];
     btlHpShown[0] = btlYou.hp;
     btlSyncSprite(0, btlYou);
-    btlLungeUntil[0] = btlHitUntil[0] = btlFaintUntil[0] = 0;
+    btlLungeUntil[0] = btlHitUntil[0] = btlFaintUntil[0] = 0; btlFxClearSide(0);
     btlEnterUntil[0] = now + BTL_ENTER_MS;
     btlSay(T(S_BTL_GO), btlYou.name);
   }
@@ -4182,7 +4223,7 @@ static void btlSwitchTo(uint8_t i) {
   btlYou = btlSquad[i];
   btlHpShown[0] = btlYou.hp;
   btlSyncSprite(0, btlYou);
-  btlLungeUntil[0] = btlHitUntil[0] = btlFaintUntil[0] = 0;
+  btlLungeUntil[0] = btlHitUntil[0] = btlFaintUntil[0] = 0; btlFxClearSide(0);
   btlEnterUntil[0] = millis() + BTL_ENTER_MS;
   btlMenu = 0;
   btlSay(T(S_BTL_GO), btlYou.name);
@@ -4228,6 +4269,7 @@ static void btlRun() {
 }
 
 void battleTap(int16_t x, int16_t y) {
+  if (btlWinUntil && (int32_t)(millis() - btlWinFrom) < 0) return;  // not up yet
   if (btlWinUntil) {          // dismiss the win screen and leave the fight
     btlWinUntil = 0;
     btlFreeSprites();
