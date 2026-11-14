@@ -244,8 +244,11 @@ uint8_t wildLevelFor(uint8_t petLevel, uint32_t seed) {
   return (uint8_t)l;
 }
 
-// Percent before the ball: common 45, rare 20; an evolved form of a common
-// line 30, of a rare line 13. Times the ball's power/10, capped at 90.
+// Per throw. The ladder underneath is the old per-throw table -- common 45,
+// rare 20, an evolved form of a common line 30, of a rare line 13, times the
+// ball's power/10, capped at 90 -- and one throw now carries what THREE of
+// those used to: 1 - (1 - p)^3, capped at WILD_CATCH_CAP. So a common creature
+// with a POKE BALL is 83%, exactly the old odds of catching it at all.
 uint8_t wildCatchChance(int16_t dex, uint8_t ball) {
   if (!itemIsBall(ball) || dex < 1 || dex > DEX_COUNT) return 0;
   uint8_t r = DEX_TBL[dex].rarity;
@@ -254,8 +257,21 @@ uint8_t wildCatchChance(int16_t dex, uint8_t ball) {
   else if (r == R_RARO) base = 20;
   else if (r == R_EVO) base = rootRarity(dex) == R_RARO ? 13 : 30;
   else base = 5;
-  uint32_t c = base * ITEM_TBL[ball].power / 10;
+  uint32_t p = base * ITEM_TBL[ball].power / 10;
+  if (p > 90) p = 90;
+  uint32_t miss = 100 - p;
+  uint32_t c = (1000000 - miss * miss * miss) / 10000;   // three tries in one
   return c > WILD_CATCH_CAP ? WILD_CATCH_CAP : (uint8_t)c;
+}
+
+uint8_t wildShakesFor(uint8_t chance, uint8_t roll100) {
+  if (roll100 < chance) return WILD_SHAKES;
+  // A miss: how close it came, 1.0 at roll == chance down to ~0 at 99.
+  uint32_t span = 100 - chance;
+  if (!span) return 0;
+  uint32_t near = 100 - roll100;                     // 1..span
+  uint32_t k = near * WILD_SHAKES / (span + 1);       // 0..WILD_SHAKES-1
+  return k >= WILD_SHAKES ? WILD_SHAKES - 1 : (uint8_t)k;
 }
 
 // ---------- the persisted state ----------

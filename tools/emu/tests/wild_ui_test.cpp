@@ -45,6 +45,15 @@ static void click(int x, int y) {
   g_touchX = x; g_touchY = y; g_touchDown = true; emuFireInterrupt(); pump(5);
   g_touchDown = false; emuFireInterrupt(); pump(3);
 }
+// A throw now plays out (throw, shake, click or flee) and taps are ignored
+// until it ends. Let it, at 20x game time so the suite stays quick.
+bool wildCatchAnimating();
+static void waitThrow() {
+  emuSetTimeScale(20);
+  for (int i = 0; i < 400 && wildCatchAnimating(); i++) pump(1);
+  emuSetTimeScale(1);
+  pump(2);
+}
 static bool on(const char *scr) { return !strcmp(SCREEN_NAME[uiCurrentScreen()], scr); }
 static void flushes(const char *what) {
   gfx->frameReady = false;
@@ -130,6 +139,7 @@ int main() {
     while (wild.st.phase == WP_CATCH) {
       uint8_t u = bag.count(ITEM_ULTRABALL);
       click(CXT, ROW(4));               // ULTRA BALL
+      waitThrow();
       if (bag.count(ITEM_ULTRABALL) != u - 1) { ck(false, "a throw spends one ball"); break; }
     }
     for (int i = 0; i < PARTY_SLOTS; i++) if (party.slots[i].dex == d) { caught = 1; lastCaught = d; }

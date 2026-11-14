@@ -14,10 +14,15 @@
 // can drive any day and hour without touching an RTC.
 
 #define WILD_PER_DAY 3        // encounters a day, refilled when the day changes
-#define WILD_THROWS 3         // balls you may throw before it flees
+// ONE throw decides it: the ball shakes up to three times and in that time the
+// creature is either caught or breaks free and runs away. The per-throw odds
+// are what three throws used to give in total, so catching is as likely as
+// before -- it just resolves in one dramatic throw.
+#define WILD_THROWS 1         // balls you may throw before it flees
+#define WILD_SHAKES 3         // a caught ball shakes this many times, then clicks
 #define WILD_SHINY_ODDS 256   // 1 in this; the Shiny Charm doubles the chance
 #define WILD_GIFT_BALLS 10    // POKE BALLs given once, the first time WILD opens
-#define WILD_CATCH_CAP 90     // no ball is ever a sure thing (percent)
+#define WILD_CATCH_CAP 95     // no ball is ever a sure thing (percent)
 // Shiny chains (docs/adventure-wild-chain.md). Odds are N / WILD_SHINY_ODDS with
 // N = 1 + chain length, at most WILD_CHAIN_SHINY_CAP (16/256 = 1/16), then x2
 // with the Shiny Charm. They apply to the CHAINED species only.
@@ -88,6 +93,11 @@ uint8_t wildLevelFor(uint8_t petLevel, uint32_t seed);
 // Catch chance in percent for a species and a ball (ItemInfo.power = x10),
 // capped at WILD_CATCH_CAP. 0 for something that is not a ball.
 uint8_t wildCatchChance(int16_t dex, uint8_t ball);
+// How many times the ball shakes for a throw that rolled `roll100` against
+// `chance`: WILD_SHAKES when caught, else 0..WILD_SHAKES-1 -- the nearer the
+// miss, the more it shakes before it bursts. Pure, so the animation and the
+// tests read the same answer.
+uint8_t wildShakesFor(uint8_t chance, uint8_t roll100);
 
 // What a throw did.
 enum WildThrow : uint8_t {

@@ -28,7 +28,6 @@ static const char *const S_W_RUN[LANG_COUNT]    = { "HUIR", "RUN", "FUIR", "FLUC
 static const char *const S_W_LETGO[LANG_COUNT]  = { "SOLTAR", "LET GO", "LIBERER", "FREILASSEN", "LASCIA", "SOLTAR" };
 static const char *const S_W_SEARCH[LANG_COUNT] = { "BUSCAR", "SEARCH", "CHERCHER", "SUCHEN", "CERCA", "PROCURAR" };
 static const char *const S_W_TODAY[LANG_COUNT]  = { "HOY %u/%u", "TODAY %u/%u", "AUJ. %u/%u", "HEUTE %u/%u", "OGGI %u/%u", "HOJE %u/%u" };
-static const char *const S_W_THROWS[LANG_COUNT] = { "TIROS %u/%u", "THROWS %u/%u", "LANCERS %u/%u", "WUERFE %u/%u", "LANCI %u/%u", "LANCES %u/%u" };
 static const char *const S_W_DONE[LANG_COUNT]   = { "VUELVE MANANA", "COME BACK TOMORROW", "REVIENS DEMAIN", "KOMM MORGEN WIEDER", "TORNA DOMANI", "VOLTE AMANHA" };
 static const char *const S_W_EGG[LANG_COUNT]    = { "PRIMERO ECLOSIONA", "HATCH YOUR EGG FIRST", "FAIS ECLORE L OEUF", "ERST AUSBRUETEN", "PRIMA FAI SCHIUDERE", "CHOQUE O OVO ANTES" };
 static const char *const S_W_MISSED[LANG_COUNT] = { "SE ESCAPO!", "IT BROKE FREE!", "IL SE LIBERE!", "BEFREIT!", "SI E LIBERATO!", "ESCAPOU!" };
@@ -39,6 +38,7 @@ static const char *const S_W_FULL[LANG_COUNT]   = { "EQUIPO Y CAJA LLENOS", "PAR
 static const char *const S_W_NOBALL[LANG_COUNT] = { "NO TE QUEDAN", "NONE LEFT", "PLUS AUCUNE", "KEINE MEHR", "NESSUNA", "NENHUMA" };
 static const char *const S_W_LOST[LANG_COUNT]   = { "SE FUE...", "IT GOT AWAY...", "IL EST PARTI...", "ES IST WEG...", "E ANDATO VIA...", "FOI EMBORA..." };
 static const char *const S_W_RAN[LANG_COUNT]    = { "HUISTE", "YOU RAN", "TU AS FUI", "DU BIST GEFLOHEN", "SEI FUGGITO", "VOCE FUGIU" };
+static const char *const S_W_GOTCHA[LANG_COUNT] = { "ATRAPADO!", "GOTCHA!", "ATTRAPE!", "GEFANGEN!", "PRESO!", "PEGUEI!" };
 static const char *const S_W_WON[LANG_COUNT]    = { "LANZA UNA BALL!", "THROW A BALL!", "LANCE UNE BALL!", "WIRF EINEN BALL!", "LANCIA UNA BALL!", "JOGUE UMA BALL!" };
 static const char *const S_W_CHAIN[LANG_COUNT]  = { "CADENA: %s x%u", "CHAIN: %s x%u", "CHAINE: %s x%u", "KETTE: %s x%u", "CATENA: %s x%u", "CORRENTE: %s x%u" };
 
@@ -138,6 +138,7 @@ static void wildChainLine(int y) {
 bool wildHubEnabled() { return true; }
 
 void wildOpened() {
+  wildCatchCancel();   // a throw left mid-animation was already settled and saved
   wildMsg = WM_NONE;
   wildMsgDex = 0;
   wildMsgItem = 0;
@@ -167,6 +168,260 @@ static void wildNameLine(int y, int16_t dex, uint8_t lvl, bool shiny) {
   featLine(y, b, DEX_TBL[dex].accent);
 }
 
+
+// ---------- the catch: throw, shake, click (or burst and flee) ----------
+//
+// ONE throw decides it (see WILD_THROWS in wild.h). The result is decided and
+// SAVED the moment the ball leaves your hand -- Wild::throwBall() -- and this
+// only replays it, so a reset mid-animation can neither lose a catch nor give
+// a second try. Taps are ignored while it plays; leaving the screen drops it.
+
+// The three balls share one 16x16 shape; the palette makes the ball.
+//   K outline  T top  H top highlight  S top markings  W white  G white shade
+static const char *const BALL_MAP[16] = {
+  ".....KKKKKK.....",
+  "...KKTTTTTTKK...",
+  "..KTSSTTTTSSTK..",
+  ".KTHSSTTTTSSTTK.",
+  ".KHHTSTTTTSTTTK.",
+  "KTHTTTTTTTTTTTTK",
+  "KTTTTTKKKKTTTTTK",
+  "KKKKKKWWWWKKKKKK",
+  "KKKKKKWWWWKKKKKK",
+  "KWWWWWKKKKWWWWWK",
+  "KWWWWWWWWWWWWWWK",
+  ".KWWWWWWWWWWWWK.",
+  ".KWWWWWWWWWWWGK.",
+  "..KWWWWWWWWWGK..",
+  "...KKWWWWWWKK...",
+  ".....KKKKKK.....",
+};
+// T, H, S per ball: POKE (red), GREAT (blue, red wings), ULTRA (black, yellow H)
+static const uint16_t BALL_PAL[3][3] = {
+  { 0xE8A4, 0xFCD3, 0xE8A4 },
+  { 0x2B7F, 0x7D9F, 0xE8A4 },
+  { 0x31A6, 0x7BEF, 0xFEA0 },
+};
+
+static uint16_t ballColor(uint8_t kind, char ch) {
+  switch (ch) {
+    case 'K': return 0x0000;
+    case 'W': return 0xFFFF;
+    case 'G': return 0xBDF7;
+    case 'T': return BALL_PAL[kind][0];
+    case 'H': return BALL_PAL[kind][1];
+    case 'S': return BALL_PAL[kind][2];
+    default: return 0;
+  }
+}
+
+// The ball centred on (cx, cy), `s` px per sprite pixel, turned `deg` degrees.
+// `gap` opens it: the top half rises and the bottom half drops by that many px.
+// Rotation maps each source pixel's centre and paints one s+1 square, which
+// leaves no holes at the small angles a shake uses and costs 256 rects at most.
+void wildDrawBall(uint8_t kind, int cx, int cy, int s, int deg, int gap) {
+  if (kind > 2) kind = 0;
+  float a = deg * 0.0174533f, ca = cosf(a), sa = sinf(a);
+  for (int r = 0; r < 16; r++) {
+    int dy = (r < 8) ? -gap : gap;
+    for (int c = 0; c < 16; c++) {
+      char ch = BALL_MAP[r][c];
+      if (ch == '.') continue;
+      float ox = (c - 7.5f) * s, oy = (r - 7.5f) * s;
+      int px = cx + (int)(ox * ca - oy * sa);
+      int py = cy + (int)(ox * sa + oy * ca) + dy;
+      gfx->fillRect(px - s / 2, py - s / 2, s + 1, s + 1, ballColor(kind, ch));
+    }
+  }
+}
+
+// A four-point sparkle, for the click: bold arms with an ink outline, so it
+// reads on the pale day background as well as at night.
+static void wildStar(int x, int y, int r, uint16_t col) {
+  if (r < 2) r = 2;
+  gfx->fillRect(x - r - 1, y - 2, 2 * r + 3, 5, UI_INK);
+  gfx->fillRect(x - 2, y - r - 1, 5, 2 * r + 3, UI_INK);
+  gfx->fillRect(x - r, y - 1, 2 * r + 1, 3, col);
+  gfx->fillRect(x - 1, y - r, 3, 2 * r + 1, col);
+  gfx->fillRect(x - 2, y - 2, 5, 5, col);
+}
+
+// Stage lengths (ms). Shakes repeat WC_SHAKE each; the end depends on the result.
+#define WC_THROW 650
+#define WC_ABSORB 400
+#define WC_DROP 350
+#define WC_SHAKE 650
+#define WC_SHAKE_MOVE 320       // the wobble; the rest of WC_SHAKE is a held breath
+#define WC_CLICK 1300
+#define WC_BURST 350
+#define WC_FLEE 900
+#define WC_MON_Y 150            // the creature's centre on this screen
+#define WC_BALL_Y 206           // where the ball lands and shakes
+#define WC_BALL_S 3             // 48 px ball
+
+enum : uint8_t { WCS_OFF = 0, WCS_THROW, WCS_ABSORB, WCS_DROP, WCS_SHAKE, WCS_CLICK, WCS_BURST, WCS_FLEE, WCS_DONE };
+
+static struct {
+  bool on = false;
+  uint8_t ball = 0;         // 0 POKE, 1 GREAT, 2 ULTRA
+  uint8_t shakes = 0;       // 0..WILD_SHAKES
+  bool caught = false;
+  int16_t dex = 0;
+  uint8_t level = 0;
+  bool shiny = false;
+  uint32_t t0 = 0;
+  uint8_t lastStage = WCS_OFF;
+  uint8_t lastShake = 0;
+} wc;
+
+static uint32_t wcEndOf(uint8_t st) {   // ms from t0 at which stage `st` ends
+  uint32_t t = WC_THROW;
+  if (st == WCS_THROW) return t;
+  t += WC_ABSORB; if (st == WCS_ABSORB) return t;
+  t += WC_DROP;   if (st == WCS_DROP) return t;
+  t += (uint32_t)wc.shakes * WC_SHAKE; if (st == WCS_SHAKE) return t;
+  if (wc.caught) { t += WC_CLICK; return t; }
+  t += WC_BURST; if (st == WCS_BURST) return t;
+  return t + WC_FLEE;
+}
+
+// Where the animation is, from the clock alone. `into` = ms into that stage.
+uint8_t wildCatchStage(uint32_t *into) {
+  if (!wc.on) { if (into) *into = 0; return WCS_OFF; }
+  uint32_t e = millis() - wc.t0;
+  static const uint8_t ORDER_OK[] = { WCS_THROW, WCS_ABSORB, WCS_DROP, WCS_SHAKE, WCS_CLICK };
+  static const uint8_t ORDER_NO[] = { WCS_THROW, WCS_ABSORB, WCS_DROP, WCS_SHAKE, WCS_BURST, WCS_FLEE };
+  const uint8_t *ord = wc.caught ? ORDER_OK : ORDER_NO;
+  uint8_t n = wc.caught ? sizeof(ORDER_OK) : sizeof(ORDER_NO);
+  uint32_t start = 0;
+  for (uint8_t i = 0; i < n; i++) {
+    uint32_t end = wcEndOf(ord[i]);
+    if (e < end) { if (into) *into = e - start; return ord[i]; }
+    start = end;
+  }
+  if (into) *into = 0;
+  return WCS_DONE;
+}
+
+bool wildCatchAnimating() { return wildCatchStage(nullptr) != WCS_OFF && wildCatchStage(nullptr) != WCS_DONE; }
+uint8_t wildCatchShakesShown() { return wc.on ? wc.shakes : 0; }
+void wildCatchCancel() { wc.on = false; }
+
+static void wcStart(uint8_t ballItem, uint8_t shakes, bool caught, int16_t dex, uint8_t lvl, bool shiny) {
+  wc.on = true;
+  wc.ball = (uint8_t)(ballItem - ITEM_POKEBALL);
+  wc.shakes = shakes > WILD_SHAKES ? WILD_SHAKES : shakes;
+  wc.caught = caught;
+  wc.dex = dex; wc.level = lvl; wc.shiny = shiny;
+  wc.t0 = millis();
+  wc.lastStage = WCS_OFF;
+  wc.lastShake = 0;
+  sfxPlay(SFX_PLAY);                       // the throw
+}
+
+// Sounds fire on the frame a stage (or a shake) begins, not on a timer of
+// their own, so they can never drift from what is drawn.
+static void wcSounds(uint8_t st, uint32_t into) {
+  if (st != wc.lastStage) {
+    if (st == WCS_CLICK) sfxPlay(SFX_VICTORY);
+    else if (st == WCS_BURST) sfxPlay(SFX_DENY);
+    else if (st == WCS_ABSORB) sfxPlay(SFX_BEAM);
+    wc.lastStage = st;
+  }
+  if (st == WCS_SHAKE) {
+    uint8_t k = (uint8_t)(into / WC_SHAKE) + 1;
+    if (k != wc.lastShake) { wc.lastShake = k; sfxPlay(SFX_TAP); }
+  }
+}
+
+static void renderCatchAnim() {
+  uint32_t into = 0;
+  uint8_t st = wildCatchStage(&into);
+  if (st == WCS_DONE) { wc.on = false; return; }   // the caller draws the result
+  wcSounds(st, into);
+
+  featBegin(TL(S_HUB_WILD));
+  wildNameLine(68, wc.dex, wc.level, wc.shiny);
+  // the ground the ball lands on, so a still ball reads as resting, not floating
+  gfx->fillRoundRect(CX - 70, WC_BALL_Y + 22, 140, 10, 5, UI_TRACK);
+
+  int bx = CX, by = WC_BALL_Y, deg = 0, gap = 0;
+  bool monShown = false;
+  int monX = CX;
+  switch (st) {
+    case WCS_THROW: {
+      // from the bottom right, in an arc, spinning, onto the creature
+      float t = into / (float)WC_THROW;
+      bx = (CX + 120) + (int)((CX - (CX + 120)) * t);
+      by = 420 + (int)((WC_MON_Y - 420) * t) - (int)(110 * 4 * t * (1 - t));
+      deg = (int)(t * 900);
+      monShown = true;
+      break;
+    }
+    case WCS_ABSORB: {
+      // the ball opens over it, a flash, and the creature is drawn inside
+      float t = into / (float)WC_ABSORB;
+      bx = CX; by = WC_MON_Y - 30; gap = 6;
+      if (t < 0.5f) monShown = true;
+      int r = t < 0.5f ? (int)(10 + 90 * t) : (int)(55 * (1 - t) * 2);
+      gfx->fillCircle(CX, WC_MON_Y, r, UI_WHITE);
+      gfx->drawCircle(CX, WC_MON_Y, r + 3, 0xFE60);
+      break;
+    }
+    case WCS_DROP: {
+      float t = into / (float)WC_DROP;
+      int y0 = WC_MON_Y - 30;
+      by = y0 + (int)((WC_BALL_Y - y0) * t * t);
+      if (t > 0.85f) by -= (int)(6 * (1 - t) / 0.15f);   // a small bounce
+      break;
+    }
+    case WCS_SHAKE: {
+      uint32_t ms = into % WC_SHAKE;
+      if (ms < WC_SHAKE_MOVE) {
+        float ph = ms / (float)WC_SHAKE_MOVE;              // one left-right-centre
+        deg = (int)(28 * sinf(ph * 6.2832f));
+        bx = CX + deg / 5;
+      }
+      break;
+    }
+    case WCS_CLICK: {
+      // three sparkles rise and fade: it is yours
+      float t = into / (float)WC_CLICK;
+      static const int SX[4] = { -44, -15, 15, 44 };
+      static const int SY[4] = { 4, -12, -12, 4 };
+      for (int i = 0; i < 4; i++) {
+        int sy = WC_BALL_Y - 24 + SY[i] - (int)(46 * t);
+        wildStar(CX + SX[i], sy, 10 - (int)(5 * t), 0xFE60);
+      }
+      featLine(262, TL(S_W_GOTCHA), UI_BAR_OK);
+      break;
+    }
+    case WCS_BURST: {
+      float t = into / (float)WC_BURST;
+      gap = (int)(4 + 26 * t);
+      gfx->fillCircle(CX, WC_BALL_Y, (int)(10 + 40 * t), UI_WHITE);
+      monShown = t > 0.5f;
+      break;
+    }
+    case WCS_FLEE: {
+      // out of the ball, and off the edge of the screen
+      float t = into / (float)WC_FLEE;
+      monShown = true;
+      monX = CX - (int)(t * t * 330);
+      bx = -100;                                           // the ball is gone
+      featLine(262, TL(S_W_FLED), UI_BAR_BAD);
+      break;
+    }
+  }
+  if (monShown) {
+    const uint8_t *th = thumbs.get(wc.dex);
+    if (th) drawThumb(th, monX - 40, WC_MON_Y - 40, 2, false);
+    else { gfx->drawCircle(monX, WC_MON_Y, 28, UI_INK); }
+  }
+  if (bx > -50) wildDrawBall(wc.ball, bx, by, WC_BALL_S, deg, gap);
+  gfx->flush();
+}
+
 static void wildCaption(int y) {
   const char *s = nullptr;
   char b[32];
@@ -194,13 +449,15 @@ static void wildCaption(int y) {
 }
 
 void renderWild() {
+  if (wc.on) {
+    renderCatchAnim();
+    if (wc.on) return;          // still playing; else fall through to the result
+  }
   featBegin(TL(S_HUB_WILD));
   char b[40];
   const Wild::State &s = wild.st;
 
   if (s.phase == WP_CATCH) {
-    snprintf(b, sizeof(b), TL(S_W_THROWS), (unsigned)(WILD_THROWS - s.throws), (unsigned)WILD_THROWS);
-    featLine(68, b, UI_INK);
     wildCaption(90);
     wildDrawMon(s.dex, 138, 2);
     wildNameLine(170, s.dex, s.level, s.shiny);
@@ -245,6 +502,7 @@ void renderWild() {
 }
 
 void wildTap(int16_t x, int16_t y) {
+  if (wildCatchAnimating()) return;   // the throw plays out; nothing to press
   if (featBackHit(x, y)) { sfxPlay(SFX_TAP); featBackToHub(); return; }
   int r = featRowAt(x, y, 6);
   if (r < 0) return;
@@ -277,15 +535,24 @@ void wildTap(int16_t x, int16_t y) {
     if (r >= WILD_ROW_BALL0 && r < WILD_ROW_BALL0 + 3) {
       uint8_t ball = ITEM_POKEBALL + (r - WILD_ROW_BALL0);
       int16_t d = s.dex;
-      uint8_t res = wild.throwBall(ball, (uint8_t)random(100), party, bag, pet);
+      uint8_t lvl = s.level;
+      bool shiny = s.shiny;
+      // The roll, the shakes it earns and the result are fixed HERE, and the
+      // result is saved by throwBall() before a single frame is drawn.
+      uint8_t roll = (uint8_t)random(100);
+      uint8_t shakes = wildShakesFor(wildCatchChance(d, ball), roll);
+      uint8_t res = wild.throwBall(ball, roll, party, bag, pet);
       wildMsgDex = d;
+      bool thrown = (res == WTH_MISSED || res == WTH_FLED || res == WTH_PARTY || res == WTH_BOX);
+      if (thrown) wcStart(ball, shakes, res == WTH_PARTY || res == WTH_BOX, d, lvl, shiny);
       switch (res) {
         case WTH_NO_BALL: wildMsg = WM_NOBALL; sfxPlay(SFX_DENY); break;
         case WTH_NO_ROOM: wildMsg = WM_FULL; sfxPlay(SFX_DENY); break;
-        case WTH_MISSED: wildMsg = WM_MISSED; sfxPlay(SFX_TAP); break;
-        case WTH_FLED: wildMsg = WM_FLED; sfxPlay(SFX_DENY); break;
-        case WTH_PARTY: wildMsg = WM_PARTY; sfxPlay(SFX_VICTORY); break;
-        case WTH_BOX: wildMsg = WM_BOX; sfxPlay(SFX_VICTORY); break;
+        // a thrown ball's sounds come from the animation (wcSounds)
+        case WTH_MISSED: wildMsg = WM_MISSED; break;
+        case WTH_FLED: wildMsg = WM_FLED; break;
+        case WTH_PARTY: wildMsg = WM_PARTY; break;
+        case WTH_BOX: wildMsg = WM_BOX; break;
         default: break;
       }
     } else if (r == WILD_ROW_LETGO) {
@@ -307,7 +574,7 @@ void wildTap(int16_t x, int16_t y) {
 
 // Not paged: a horizontal swipe goes back to the hub. Nothing is lost -- the
 // encounter and the catch are persisted and wait there.
-void wildSwipe(int dir) { (void)dir; featBackToHub(); }
+void wildSwipe(int dir) { (void)dir; wildCatchCancel(); featBackToHub(); }
 
 void wildBattleEnded(bool won, bool ran) {
   wildMsgDex = wild.st.dex;
