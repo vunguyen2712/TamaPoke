@@ -1,4 +1,5 @@
 #include "wild.h"
+#include "persona.h"
 #include "pet.h"
 #include "party.h"
 #include "items.h"
@@ -437,6 +438,8 @@ uint8_t Wild::throwBall(uint8_t ball, uint8_t roll100, Party &pt, Bag &bg, Pet &
     tmp.ageMinutes = (uint32_t)(st.level - 1) * MINUTES_PER_LEVEL;
     tmp.relearnFromLevel();
     for (uint8_t i = 0; i < MOVE_SLOTS; i++) m.moves[i] = tmp.moves[i];
+    // A personality like any hatched creature; banked ones keep it in `spare`.
+    m.spare = personaRoll();
     bool inParty = pt.add(m);
     if (!inParty) pt.boxAdd(m);
     int16_t d = st.dex;
