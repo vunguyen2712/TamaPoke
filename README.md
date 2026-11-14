@@ -592,7 +592,39 @@ The SHINY CHARM halves the egg's shiny roll: 1/48 -> 1/24, and the best case
 
 #### Wild alerts and shiny chains
 
-(to be written by the wild alerts and shiny chains feature)
+**The "!" on the main screen.** A pulsing red circle with a "!" (gold when it
+is a shiny) appears left of the pet, above the bars, when the **next** wild
+encounter waiting today is worth a look. Tapping it opens WILD on exactly that
+creature -- the alert peeks at the same deterministic roll the WILD screen
+makes, and spends nothing. The hub's WILD row shows `!` at the same time.
+
+| The next encounter is... | Alert |
+|---|---|
+| a **rare** species (a rare base form, or an evolved form of a rare line) | yes |
+| a **shiny** | yes (gold) |
+| a species only possible in **some** weather or time window (GHOST types: night or fog) | yes |
+| **missing from your Pokedex** | yes |
+| none of these, or already beaten and waiting for a ball | no |
+
+Hidden when no encounters are left today, while the live creature is an egg
+or mid-farewell, and when the clock has never been set.
+
+**Shiny chains.** Beating the same species again in the wild extends a chain;
+the WILD screen shows it (`CHAIN: ZUBAT x4`).
+
+| Rule | Number |
+|---|---|
+| A wild win against the chained species | **+1** link (counts up to 99) |
+| A wild win against a different species | the chain **restarts at 1** on that species |
+| A whole day with no wild win in between (last link on day D, nothing on D+1) | **broken** |
+| Losing a fight, running, letting one go, catching it | no effect |
+| Spawn boost while the chain is alive | the chained species weighs **as much as every other eligible species together** -- **half** of each roll, whenever it can appear (its region, level and time rules still apply) |
+| Shiny odds of the chained species | **(1 + links)/256**, capped at **1/16** (15 links); the SHINY CHARM doubles it (up to **1/8**) |
+| Shiny odds of everything else | unchanged: 1/256, 1/128 with the charm |
+
+A shiny wild creature is shiny in the battle too. To keep a chain, fight the
+chained species and RUN from the others. Design notes:
+[`docs/adventure-wild-chain.md`](docs/adventure-wild-chain.md).
 
 &nbsp;
 

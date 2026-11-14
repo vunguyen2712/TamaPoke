@@ -18,6 +18,11 @@
 #define WILD_SHINY_ODDS 256   // 1 in this; the Shiny Charm doubles the chance
 #define WILD_GIFT_BALLS 10    // POKE BALLs given once, the first time WILD opens
 #define WILD_CATCH_CAP 90     // no ball is ever a sure thing (percent)
+// Shiny chains (docs/adventure-wild-chain.md). Odds are N / WILD_SHINY_ODDS with
+// N = 1 + chain length, at most WILD_CHAIN_SHINY_CAP (16/256 = 1/16), then x2
+// with the Shiny Charm. They apply to the CHAINED species only.
+#define WILD_CHAIN_SHINY_CAP 16
+#define WILD_CHAIN_MAX 99     // the chain stops counting here (it never wraps)
 
 // Weather of the day. Derived from the day number alone, so it is the same all
 // day, the same after a reboot, and needs no storage.
@@ -49,6 +54,35 @@ int16_t wildPredecessor(int16_t dex);
 
 // A deterministic pick: the same inputs always give the same creature.
 int16_t wildRollSpecies(uint8_t region, uint8_t weather, uint8_t tod, uint8_t level, uint32_t seed);
+// The same pick with a shiny chain running on `chainDex` (0 = none): when that
+// species can spawn in this roll, its weight is raised to equal the sum of
+// everything else's, so it is (at least) HALF of the roll. Never in wildWeight():
+// that stays the plain conditions-only weight other features read.
+int16_t wildRollSpeciesChained(uint8_t region, uint8_t weather, uint8_t tod, uint8_t level, uint32_t seed,
+                               int16_t chainDex);
+// Shiny chance numerator out of WILD_SHINY_ODDS: 1 + chainLen, capped at
+// WILD_CHAIN_SHINY_CAP, doubled by the charm. chainLen 0 = the plain 1 (2).
+uint16_t wildShinyNumer(uint8_t chainLen, bool charm);
+// GHOST-style species that some weather/window combination keeps away: seeing
+// one means today's conditions are what brought it out.
+bool wildConditional(int16_t dex);
+// Rare for the wild: a rare base form, or an evolved form of a rare line.
+bool wildIsRare(int16_t dex);
+
+// Why the next encounter is worth an alert (0 = it is not). ONE answer, read
+// by the main-screen badge and the hub row alike.
+enum WildAlertWhy : uint8_t { WA_RARE = 1, WA_SHINY = 2, WA_COND = 4, WA_NEW = 8 };
+uint8_t wildAlertWhy(int16_t dex, bool shiny, bool registered);
+
+// What the next encounter is (or the one already out).
+struct WildNext {
+  int16_t dex = 0;
+  uint8_t level = 0;
+  uint8_t shiny = 0;
+  uint8_t weather = 0;
+  uint8_t tod = 0;
+  bool out = false;         // already out (MEET/FIGHT/CATCH), not a fresh roll
+};
 // Wild level: the live pet's level -5..+1, at least 2, at most 100.
 uint8_t wildLevelFor(uint8_t petLevel, uint32_t seed);
 // Catch chance in percent for a species and a ball (ItemInfo.power = x10),
@@ -95,6 +129,20 @@ public:
   State st;
   bool gift = false;        // NVS "wgift": the starter balls were given
 
+  // The shiny chain (NVS "wchain", raw bytes, append-only). Beating `dex` again
+  // adds a link; beating another species restarts it on that one; a whole day
+  // with no wild win in between breaks it (alive while today <= day + 1).
+  struct Chain {
+    int16_t dex = 0;        // the chained species (0 = none)
+    uint8_t len = 0;        // links, 1..WILD_CHAIN_MAX
+    uint8_t best = 0;       // the longest chain ever reached
+    uint32_t day = 0;       // the day of the last link
+  };
+  Chain ch;
+  // The chain as it stands on `day`: 0 / 0 once it has broken.
+  uint8_t chainLen(uint32_t day) const;
+  int16_t chainDex(uint32_t day) const { return chainLen(day) ? ch.dex : 0; }
+
   void begin();             // load from NVS; a fight cut off by a reset is spent
   void save();
 
@@ -107,6 +155,11 @@ public:
   // the day, which encounter of the day it is, the time window, the weather and
   // the region decide it. Emits EV_WILD_SEEN. Returns true if one is out.
   bool roll(uint32_t day, uint32_t epoch, uint8_t region, uint8_t petLevel, bool charm);
+  // THE answer to "what is next": exactly what roll() would put out with the
+  // same arguments, without writing or emitting anything. roll() is built on
+  // it, so a peek (the main-screen alert) and the screen can never disagree.
+  // False when nothing can come today.
+  bool peek(uint32_t day, uint32_t epoch, uint8_t region, uint8_t petLevel, bool charm, WildNext &out) const;
 
   void fightStarted();      // MEET -> FIGHT (persisted before the battle starts)
   // From the battle: a win opens the catch (EV_WILD_WIN, maybe a berry -- the
@@ -124,6 +177,8 @@ public:
 
 private:
   void spend();
+  void chainWin(int16_t dex, uint32_t day);
+  void saveChain();
   Preferences prefs;
   bool opened = false;      // a Wild nobody begin()'d never writes
 };

@@ -93,9 +93,10 @@ and box costs nothing. The caught creature is built like `foeFromSpecies()`
 builds the battle's opponent: a scratch `Pet` (never `begin()`'d, so it cannot
 write NVS) hatched as the species, aged to the level, `relearnFromLevel()`.
 
-Note the battle opponent itself is `startBattle()`'s usual IV-20, non-shiny
-build; the shiny and the random IVs belong to the creature you catch, not to
-the one you fought. A shiny encounter is shown with a `*` before its name.
+Note the battle opponent itself is `startBattle()`'s usual IV-20 build; the
+random IVs belong to the creature you catch, not to the one you fought. A shiny
+encounter is shown with a `*` before its name, and since round 2 the foe is
+drawn shiny too (`wildTap()` sets `btlFoe.shiny` and re-syncs its sprite).
 
 ## Persistence
 
@@ -112,9 +113,13 @@ the one you fought. A shiny encounter is shown with a `*` before its name.
 `EV_WILD_SEEN` when a creature is rolled out, `EV_WILD_WIN` when it is beaten,
 `EV_WILD_CATCH` when it is caught (arg = dex for all three).
 
+## Round 2
+
+The main-screen alert and shiny chains: `docs/adventure-wild-chain.md`.
+`Wild::roll()` is now built on `Wild::peek()`.
+
 ## Not done
 
 - No weather glyph on the main screen (optional; left out to keep
   `TamaPoke.ino` untouched).
-- The battle does not show the wild creature as shiny.
 - Encounter screen shows the gallery thumbnail, not the animated PMD sprite.
