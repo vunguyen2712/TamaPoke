@@ -1097,6 +1097,9 @@ uint8_t Pet::playResult(uint8_t score) {
   addBond((uint8_t)(2 + gain / 6));
   registerCare();
   save();
+  // Every way a ball-game session ends comes through here -- the clock, three
+  // misses, and leaving early -- so this is the one place to announce it.
+  if (opened) gameEvent(EV_PLAY, score);
   return gain;
 }
 
@@ -1144,6 +1147,7 @@ uint8_t Pet::trainSpeed(uint16_t hits) {
   addBond((uint8_t)(2 + gain / 6));
   registerCare();
   save();
+  if (opened && hits) gameEvent(EV_TRAIN, 2);   // a session with no hits trained nothing
   return gain;
 }
 
@@ -1169,6 +1173,7 @@ uint8_t Pet::trainStrength(uint16_t hits) {
   addBond((uint8_t)(2 + gain / 6));
   registerCare();
   save();
+  if (opened && hits) gameEvent(EV_TRAIN, 0);
   return gain;
 }
 
