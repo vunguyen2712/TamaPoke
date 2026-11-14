@@ -34,6 +34,23 @@ const SaveField SAVE_FIELDS[] = {
   { "party", SK_BYTES }, { "box", SK_BYTES },
   // settings, so a restored device plays the way it did
   { "lang", SK_U8 },    { "snd", SK_BOOL },   { "vol", SK_U8 },
+  // ---- the bag (items.cpp)
+  { "bag", SK_BYTES },
+  //
+  // ---- wild encounters (wild.cpp) -- keys go below this line
+  //
+  //
+  // ---- daily / weekly tasks (tasks.cpp) -- keys go below this line
+  //
+  //
+  // ---- battle tower and gym rematches (tower.cpp) -- keys go below this line
+  //
+  //
+  // ---- daycare / breeding (breed.cpp) -- keys go below this line
+  //
+  //
+  // ---- held items, friendship, dex rewards (items.cpp) -- keys go below this line
+  //
 };
 const uint16_t SAVE_FIELD_COUNT = sizeof(SAVE_FIELDS) / sizeof(SAVE_FIELDS[0]);
 

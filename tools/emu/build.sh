@@ -18,10 +18,7 @@ fi
 # The Arduino build generates function prototypes for the .ino automatically;
 # a plain g++ build does not, and the sketch calls plenty of functions before
 # defining them. Regenerated every build so it can never go stale.
-python3 genproto.py "$ROOT/TamaPoke.ino"
-
-# .ino is C++ but g++ will not compile that extension
-{ echo '#include "proto.h"'; cat "$ROOT/TamaPoke.ino"; } > sketch.cpp
+bash "$HERE/gensketch.sh" "$HERE"
 
 g++ -std=c++17 -O1 -w \
   -I. -I"$ROOT" \
@@ -29,6 +26,7 @@ g++ -std=c++17 -O1 -w \
   $(sdl2-config --cflags) \
   -o tamapoke-emu \
   sketch.cpp wavout.cpp "$ROOT/gbsynth.cpp" "$ROOT/pet.cpp" "$ROOT/i18n.cpp" "$ROOT/party.cpp" "$ROOT/battle.cpp" "$ROOT/link.cpp" "$ROOT/save.cpp" \
+  "$ROOT/game_events.cpp" "$ROOT/items.cpp" "$ROOT/wild.cpp" "$ROOT/tasks.cpp" "$ROOT/tower.cpp" "$ROOT/breed.cpp" \
   host_impl.cpp font.cpp clock.cpp main_sdl.cpp \
   $(sdl2-config --libs)
 

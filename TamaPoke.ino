@@ -33,6 +33,12 @@
 #include "rtcbat.h"
 #include "i18n.h"
 #include "audio.h"
+#include "game_events.h"
+#include "items.h"
+#include "wild.h"
+#include "tasks.h"
+#include "tower.h"
+#include "breed.h"
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
@@ -106,19 +112,29 @@ uint8_t cardPage = 0;         // 0 perfil, 1 stats+medallas
 // internally), so a hub on that axis would be ambiguous; the header was inert
 // and is the only free surface left.
 bool menuOpen = false;
+// The Adventure hub (ui_hub.ino) and the feature screens it opens, one tab file
+// each. They are flags HERE, not in their own tabs, because uiCurrentScreen()
+// and the dispatchers below are compiled before the tabs are.
+bool hubOpen = false;
+bool wildOpen = false;
+bool tasksOpen = false;
+bool towerOpen = false;
+bool daycareOpen = false;
+bool bagOpen = false;
+uint8_t hubPage = 0;   // one page today; a seventh row pages instead of shrinking
 #define MENU_X 73
 // Four rows: PARTY and GYMS came out, since a swipe right and a swipe left now
 // reach them directly. Sized to the bezel -- the panel is 320 wide, so 160 from
 // the centre, and sqrt(233^2 - 160^2) = 169 means it can only span y 64..402.
-#define MENU_Y 75
+#define MENU_Y 72
 #define MENU_W 320
-#define MENU_H 316
-#define MENU_ROW_H 52
+#define MENU_H 326
+#define MENU_ROW_H 44
 #define MENU_ROW_GAP 6
-// 5 rows: STATS / POKEDEX / SETTINGS / RETIRE / CLOSE. At MENU_Y 75 the panel
-// spans 75..391 and the round display gives a half-width of 171 there against
-// the 160 a row needs, so the corners stay on glass.
-#define MENU_ROWS 5
+// 6 rows: ADVENTURE / STATS / POKEDEX / SETTINGS / RETIRE / CLOSE. The panel
+// spans 72..398; the round display's half-width is 168 at the top edge and 164
+// at the bottom against the 160 the panel needs, so the corners stay on glass.
+#define MENU_ROWS 6
 #define MENU_ROW_Y(i) (MENU_Y + 16 + (i) * (MENU_ROW_H + MENU_ROW_GAP))
 
 // Party screen. partyPick != 0 means the newcomer needs a slot: the player
@@ -211,7 +227,10 @@ enum : uint8_t {
   SCR_STARTER = 0, SCR_REGION, SCR_GALLERY, SCR_DEXPICK, SCR_MOVEPICK, SCR_BOX,
   SCR_PARTY, SCR_KEYBOARD, SCR_CARD, SCR_PLAYER, SCR_CLOCK, SCR_GYM, SCR_GYMPICK,
   SCR_LAN, SCR_PICK, SCR_BATTLE, SCR_WIN, SCR_LEARN, SCR_TRAIN, SCR_MENU,
-  SCR_GAME, SCR_MAIN, SCR_COUNT
+  SCR_GAME,
+  // the Adventure hub and the screens it leads to (ui_*.ino)
+  SCR_HUB, SCR_WILD, SCR_TASKS, SCR_TOWER, SCR_DAYCARE, SCR_BAG,
+  SCR_MAIN, SCR_COUNT
 };
 extern const char *const SCREEN_NAME[SCR_COUNT];   // const is internal linkage in C++
 
@@ -235,7 +254,9 @@ const char *const SCREEN_NAME[SCR_COUNT] = {
   "starter", "region", "gallery", "dexpick", "movepick", "box",
   "party", "keyboard", "card", "player", "clock", "gym", "gympick",
   "lan", "pick", "battle", "win", "learn", "train", "menu",
-  "minigame", "main"
+  "minigame",
+  "hub", "wild", "tasks", "tower", "daycare", "bag",
+  "main"
 };
 
 // Badge art for a region, or nullptr when that region has none yet.
@@ -398,6 +419,11 @@ static_assert(PDET_R_X > PDET_L_X + PDET_L_W + 8,
 
 uint8_t gymRegion = 0;
 uint8_t btlRegion = 0;
+// What kind of fight is running, so the end of a battle can be routed to the
+// feature that started it (featBattleEnded in ui_hub.ino). Set by every
+// start*Battle(); a feature that starts its own fight sets it straight after.
+enum : uint8_t { BK_DEBUG = 0, BK_GYM, BK_LAN, BK_WILD, BK_TOWER, BK_REMATCH };
+uint8_t btlKind = BK_DEBUG;
 #define TRAINERS (TRAINER_SETS[gymRegion % GYM_REGIONS].list)
 #define BTL_TRAINERS (TRAINER_SETS[btlRegion % GYM_REGIONS].list)
 bool gShowAllAvatars = false;  // emulator screenshot aid, never set on hardware
@@ -686,6 +712,12 @@ void setup() {
 
   party.begin();
   pet.begin();
+  bag.begin();
+  // feature modules load after the creature, the party and the bag they read
+  wildBegin();
+  tasksBegin();
+  towerBegin();
+  breedBegin();
   sdBegin();
   thumbs.load();
 
@@ -1194,6 +1226,7 @@ void onSwipeV(int dir) {
   if (battleOpen) return;   // no swiping out of a fight
   if (pickOpen) { pickOpen = false; return; }
   if (lanOpen) { lanLeave(); lanOpen = false; return; }
+  if (featScreen() != SCR_COUNT) { featSwipeV(dir); return; }
   if (gymOpen) {
     // Same gesture as the Pokedex: vertical changes region, horizontal pages.
     gymRegion = (uint8_t)((gymRegion + (dir > 0 ? 1 : GYM_REGIONS - 1)) % GYM_REGIONS);
@@ -1558,6 +1591,7 @@ void onSwipe(int dir) {
     else pickPage = (uint8_t)p;
     return;
   }
+  if (featScreen() != SCR_COUNT) { featSwipe(dir); return; }
   if (gymOpen) {   // horizontal pages the ladder; vertical backs out
     uint8_t pages = (TRAINER_COUNT + GYM_ROWS - 1) / GYM_ROWS;
     int p = (int)gymPage + (dir > 0 ? -1 : 1);
@@ -1681,6 +1715,10 @@ void onTap(int16_t x, int16_t y) {
     lanTap(x, y);
     return;
   }
+  if (featScreen() != SCR_COUNT) {
+    featTap(x, y);
+    return;
+  }
   if (gymOpen && gymPick) {
     int r = regionPickTap(x, y, RPICK_FOR_GYMS);
     if (r >= 0) {
@@ -1777,14 +1815,15 @@ void onTap(int16_t x, int16_t y) {
       if (y < ry || y > ry + MENU_ROW_H) continue;
       sfxPlay(SFX_TAP);
       menuOpen = false;
-      if (i == 0) { cardOpen = true; cardPage = 1; }   // straight to the stats page
-      else if (i == 1) { galleryOpen = true; galleryPick = true; galleryPage = 0; rpickPage = 0; galleryDetail = 0; galleryDirty = true; }
-      else if (i == 2) { openClock(); }
-      else if (i == 3) {
+      if (i == 0) { hubOpen = true; hubPage = 0; }
+      else if (i == 1) { cardOpen = true; cardPage = 1; }   // straight to the stats page
+      else if (i == 2) { galleryOpen = true; galleryPick = true; galleryPage = 0; rpickPage = 0; galleryDetail = 0; galleryDirty = true; }
+      else if (i == 3) { openClock(); }
+      else if (i == 4) {
         if (!pet.canRetireNow()) { sfxPlay(SFX_DENY); return; }
         choiceKind = 3; choiceUntil = millis() + 12000;
       }
-      return;                                     // i == 4 is CLOSE: just shut
+      return;                                     // i == 5 is CLOSE: just shut
     }
     return;
   }
@@ -2127,6 +2166,7 @@ uint8_t uiCurrentScreen() {
   if (battleOpen) return SCR_BATTLE;
   if (pickOpen) return SCR_PICK;
   if (lanOpen) return SCR_LAN;
+  { uint8_t f = featScreen(); if (f != SCR_COUNT) return f; }
   if (gymOpen) return gymPick ? SCR_GYMPICK : SCR_GYM;
   if (pet.hasLearnOffer()) return SCR_LEARN;
   if (gameOpen || sackOpen || spdOpen) return SCR_GAME;
@@ -2233,6 +2273,10 @@ void render() {
   }
   if (lanOpen) {
     renderLan();
+    return;
+  }
+  if (featScreen() != SCR_COUNT) {
+    featRender();
     return;
   }
   if (gymOpen) {
@@ -3344,6 +3388,7 @@ void startLinkBattle() {
   btlYou = btlSquad[0];
   btlLink = true;
   btlLinkHost = lan.isHost;
+  btlKind = BK_LAN;
   btlTrainer = -1;
   btlHard = false;
   btlFoeAt = 0;
@@ -3386,6 +3431,7 @@ void startTrainerBattle(uint8_t idx, bool hard) {
   // and the leader's replacements came from Kanto's roster. From here on the
   // fight reads only BTL_TRAINERS, never TRAINERS (which follows gymRegion).
   btlRegion = gymRegion % GYM_REGIONS;
+  btlKind = BK_GYM;
   btlTrainer = (int8_t)idx;
   btlHard = hard;
   btlFoeAt = 0;
@@ -3417,6 +3463,8 @@ void startBattle(int16_t dex, uint8_t lvl) {
   // The opponent is built through Pet so it gets the same stat formula and the
   // same learnset-driven moveset the player's creature does -- no special-cased
   // "enemy" maths that could quietly diverge.
+  btlKind = BK_DEBUG;
+  btlTrainer = -1;
   Pet foe;
   foe.dbgHatchAs(dex, false);
   foe.ivAtk = foe.ivDef = foe.ivSpe = foe.ivHp = 20;
@@ -3646,6 +3694,12 @@ static void btlResolve(uint8_t yourMove) {
       uint8_t amt = (btlHard ? 6 + random(5) : 3 + random(3)) + btlTrainer / 3;
       btlTrainGain = pet.rewardTraining(amt, btlTrainWhich);
     }
+    if (!btlLink && btlKind == BK_GYM)
+      gameEvent(btlWon ? EV_GYM_WIN : EV_GYM_LOSS, btlTrainer);
+    // Every non-link fight's outcome goes to the feature that started it --
+    // a wild creature to catch, a tower floor cleared. Before the music and
+    // the win screen, so the feature can still decide what is shown next.
+    if (!btlLink) featBattleEnded(btlWon, false);
     audioMusic(btlWon ? MUS_VICTORY : MUS_NONE);
     if (btlWon) sfxPlay(SFX_VICTORY);
     // Tell the peer before anything else: if we stop here without sending, the
@@ -3653,7 +3707,7 @@ static void btlResolve(uint8_t yourMove) {
     if (btlLink && btlLinkHost) lan.sendEnd(btlWon);
     if (btlLink) { btlSay("%s", btlWon ? T(S_BTL_WIN) : T(S_BTL_LOSE)); return; }
     if (btlWon && btlTrainer >= 0) { btlWinUntil = millis() + 60000; return; }
-    btlSay("%s", T(S_BTL_LOSE));
+    btlSay("%s", btlWon ? T(S_BTL_WIN) : T(S_BTL_LOSE));   // a non-trainer win is still a win
   }
 }
 
@@ -4032,6 +4086,7 @@ static bool btlBackTap(int16_t x, int16_t y) {
 // will never come.
 static void btlRun() {
   sfxPlay(SFX_DENY);
+  if (!btlLink && !btlOver) featBattleEnded(false, true);   // ran: a loss to the feature
   btlFreeSprites();
   audioMusic(MUS_NONE);
   if (btlLink) { lanLeave(); btlLink = false; lanOpen = true; }
@@ -5171,10 +5226,11 @@ void renderCard() {
 // Row labels are built fresh each frame because two of them carry live counts.
 static void menuRowLabel(int i, char *out, size_t n) {
   switch (i) {
-    case 0: snprintf(out, n, "%s", T(S_STATS)); break;
-    case 1: snprintf(out, n, T(S_POKEDEX_FMT), pet.registeredCount(), DEX_COUNT); break;
-    case 2: snprintf(out, n, "%s", T(S_SETTINGS)); break;
-    case 3: snprintf(out, n, "%s", T(S_RETIRE)); break;
+    case 0: snprintf(out, n, "%s", hubMenuLabel()); break;
+    case 1: snprintf(out, n, "%s", T(S_STATS)); break;
+    case 2: snprintf(out, n, T(S_POKEDEX_FMT), pet.registeredCount(), DEX_COUNT); break;
+    case 3: snprintf(out, n, "%s", T(S_SETTINGS)); break;
+    case 4: snprintf(out, n, "%s", T(S_RETIRE)); break;
     default: snprintf(out, n, "%s", T(S_CLOSE)); break;
   }
 }
@@ -5191,7 +5247,7 @@ void drawMenu() {
   for (int i = 0; i < MENU_ROWS; i++) {
     int y = MENU_ROW_Y(i);
     bool close = (i == MENU_ROWS - 1);
-    bool dead = (i == 3 && !pet.canRetireNow());   // an egg or a companion
+    bool dead = (i == 4 && !pet.canRetireNow());   // an egg or a companion
     gfx->fillRoundRect(MENU_X + 18, y, MENU_W - 36, MENU_ROW_H, 12,
                        close || dead ? UI_TRACK : UI_BG_DAY);
     gfx->drawRoundRect(MENU_X + 18, y, MENU_W - 36, MENU_ROW_H, 12, UI_INK);

@@ -21,7 +21,6 @@ EMU="$(cd "$HERE/.." && pwd)"
 ROOT="$(cd "$EMU/../.." && pwd)"
 FILTER="${1:-}"
 
-command -v sdl2-config >/dev/null || { echo "SDL2 not found (brew install sdl2)" >&2; exit 1; }
 
 # sketch.cpp + proto.h come from the normal build; this also proves the emulator
 # still compiles before anything is tested against it
@@ -29,13 +28,20 @@ OUT="$(mktemp -d)"
 OUT_FW="$OUT/firmware.log"
 trap 'rm -rf "$OUT"' EXIT
 
-bash "$EMU/build.sh" >/dev/null
+# With SDL the full emulator is built too, which proves it still compiles. The
+# tests themselves are headless and only need the generated sketch.
+if command -v sdl2-config >/dev/null; then
+  bash "$EMU/build.sh" >/dev/null
+else
+  echo "(no SDL2: skipping the clickable emulator build; the tests do not need it)"
+  bash "$EMU/gensketch.sh" "$EMU" >/dev/null
+fi
 
 # The emulator generates proto.h with every prototype at the top, so it will
 # happily compile a sketch that arduino-cli rejects for using a function before
 # it is declared. That shipped once. If arduino-cli is installed, the firmware
 # build is the one that decides.
-if command -v arduino-cli >/dev/null; then
+if [ -z "$SKIP_FW" ] && command -v arduino-cli >/dev/null; then   # SKIP_FW=1 to skip
   FQBN="esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=app3M_fat9M_16MB"
   if ! arduino-cli compile --fqbn "$FQBN" "$ROOT" >/dev/null 2>"$OUT_FW"; then
     echo "=== THE FIRMWARE DOES NOT COMPILE (the emulator does; that is not the same thing)"
@@ -46,11 +52,12 @@ fi
 
 # arrays, not a string: the sprite dir has to reach the compiler still quoted,
 # and passing these through eval silently strips them
-CORE=("$ROOT/gbsynth.cpp" "$ROOT/pet.cpp" "$ROOT/i18n.cpp" "$ROOT/party.cpp" "$ROOT/battle.cpp" "$ROOT/link.cpp" "$ROOT/save.cpp")
+CORE=("$ROOT/gbsynth.cpp" "$ROOT/pet.cpp" "$ROOT/i18n.cpp" "$ROOT/party.cpp" "$ROOT/battle.cpp" "$ROOT/link.cpp" "$ROOT/save.cpp"
+      "$ROOT/game_events.cpp" "$ROOT/items.cpp" "$ROOT/wild.cpp" "$ROOT/tasks.cpp" "$ROOT/tower.cpp" "$ROOT/breed.cpp")
 FLAGS=(-std=c++17 -O1 -w -I"$EMU" -I"$ROOT" -DSPRITE_DIR="\"$ROOT/tools/sdcard/mons\"")
 
 # these drive setup()/loop()/render(), so they need the sketch itself
-needs_sketch() { case "$1" in badge_region_test|touch_test|flush_test|joy_test|anim_test|swipe_test|lan_test|console_test|hit_test|starter_test|release_test) return 0;; *) return 1;; esac; }
+needs_sketch() { case "$1" in badge_region_test|wild_ui_test|tasks_ui_test|tower_ui_test|rematch_ui_test|daycare_ui_test|bag_ui_test|touch_test|flush_test|joy_test|anim_test|swipe_test|lan_test|console_test|hit_test|starter_test|release_test) return 0;; *) return 1;; esac; }
 
 # and these are standalone: gbsynth.cpp has no Arduino dependency at all, which
 # is the point of it -- linking the game core in would only demand stubs for

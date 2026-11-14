@@ -26,6 +26,8 @@ extern uint8_t cardPage;
 extern uint8_t partyDetail, boxDetail;
 extern bool boxOpen, releaseConfirm;
 extern Party party;
+// the Adventure hub and its feature screens (ui_*.ino)
+extern bool hubOpen, wildOpen, tasksOpen, towerOpen, daycareOpen, bagOpen;
 void startBattle(int16_t dex, uint8_t lvl);
 
 static int bad = 0;
@@ -34,6 +36,7 @@ static void clearAll(){
   trainOpen=movePickOpen=battleOpen=gymOpen=playerOpen=false;
   boxOpen=releaseConfirm=false;
   partyDetail=boxDetail=0;
+  hubOpen=wildOpen=tasksOpen=towerOpen=daycareOpen=bagOpen=false;
 }
 static void check(const char *name){
   gfx->frameReady = false;
@@ -84,6 +87,14 @@ int main(){
   clearAll(); partyOpen=true; partyDetail=1; releaseConfirm=true;  check("partyconfirm");
   clearAll(); partyOpen=true; boxOpen=true; boxDetail=1;           check("boxsheet");
   clearAll(); partyOpen=true; boxOpen=true; boxDetail=1; releaseConfirm=true; check("boxconfirm");
+  // Adventure: the hub and every screen it opens. A feature that adds a
+  // sub-state (a catch prompt, a result page) adds a check for it here too.
+  clearAll(); hubOpen=true;      check("hub");
+  clearAll(); wildOpen=true;     check("wild");
+  clearAll(); tasksOpen=true;    check("tasks");
+  clearAll(); towerOpen=true;    check("tower");
+  clearAll(); daycareOpen=true;  check("daycare");
+  clearAll(); bagOpen=true;      check("bag");
 
   clearAll();                       crumbIs("main");
   clearAll(); trainOpen=true;       crumbIs("train");
@@ -94,6 +105,12 @@ int main(){
   clearAll(); movePickOpen=true;    crumbIs("movepick");
   clearAll(); clockOpen=true;       crumbIs("clock");
   clearAll(); cardOpen=true;        crumbIs("card");
+  clearAll(); hubOpen=true;         crumbIs("hub");
+  clearAll(); wildOpen=true;        crumbIs("wild");
+  clearAll(); tasksOpen=true;       crumbIs("tasks");
+  clearAll(); towerOpen=true;       crumbIs("tower");
+  clearAll(); daycareOpen=true;     crumbIs("daycare");
+  clearAll(); bagOpen=true;         crumbIs("bag");
   clearAll(); startBattle(9,50);    crumbIs("battle");
   clearAll();
 

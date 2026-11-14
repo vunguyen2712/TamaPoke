@@ -360,6 +360,39 @@ stat past what its IV allows. Banked members are frozen at what they were banked
 with, and battling already costs the live pet energy — that, not a cooldown, is
 what rate-limits rematching. A fully trained creature is told so.
 
+### Adventure (menu -> ADVENTURE)
+
+Everything below hangs off one hub opened from the menu's ADVENTURE row. Each
+section is owned by one feature and documents its exact numbers.
+
+#### Wild encounters and weather
+
+(to be written by the wild feature)
+
+&nbsp;
+
+#### Daily and weekly tasks
+
+(to be written by the tasks feature)
+
+&nbsp;
+
+#### Battle Tower and gym rematches
+
+(to be written by the tower feature)
+
+&nbsp;
+
+#### Daycare
+
+(to be written by the daycare feature)
+
+&nbsp;
+
+#### Items, held items, friendship evolution, Pokedex rewards
+
+(to be written by the items feature)
+
 ## Hardware
 
 - Board: [ESP32-S3-Touch-AMOLED-1.75](https://www.waveshare.com/wiki/ESP32-S3-Touch-AMOLED-1.75)

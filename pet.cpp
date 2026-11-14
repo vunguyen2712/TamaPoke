@@ -4,6 +4,7 @@
 #include "moves.h"
 #include "noart.h"   // speciesHasArt(): the egg pool skips what cannot be drawn
 #include "audio.h"
+#include "game_events.h"
 
 // Reads a blob that may be LONGER than the array we are reading it into.
 //
@@ -507,8 +508,10 @@ void Pet::setRegion(uint8_t r) {
 
 void Pet::registerSpecies(int16_t dex) {
   if (dex < 1 || dex > DEX_COUNT) return;
+  bool fresh = !isRegistered(dex);
   dexReg[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
   if (shiny) dexShinyReg[(dex - 1) >> 3] |= (1 << ((dex - 1) & 7));
+  if (fresh && opened) gameEvent(EV_DEX_REGISTER, dex);
 }
 
 // la racha y el vinculo mejoran el sorteo del huevo (0..~14)
@@ -540,6 +543,7 @@ void Pet::registerCare() {
   }
   checkMedals();
   save();
+  if (opened) gameEvent(EV_CARE_DAY, streak);
 }
 
 void Pet::addBond(uint8_t amt) {
@@ -957,6 +961,9 @@ void Pet::hatch() {
   checkMedals();     // por si nace ya en forma final (legendario)
   sfxPlay(SFX_HATCH);
   save();
+  // Only the player's own creature: the battle builds its opponents through a
+  // scratch Pet that also hatches, and those must not count as hatches.
+  if (opened) gameEvent(EV_HATCH, speciesId);
 }
 
 // ¿se dan ya las condiciones para evolucionar? Cada descuido retrasa la
@@ -1002,6 +1009,7 @@ void Pet::evolve() {
   sfxPlay(SFX_EVOLVE);
   evolveUntil = millis() + EVOLVE_ANIM_MS;
   save();
+  if (opened) gameEvent(EV_EVOLVE, speciesId);
 }
 
 void Pet::feed() {
@@ -1023,6 +1031,7 @@ void Pet::feedBerry(uint8_t color) {
   eatUntil = millis() + EAT_ANIM_MS;
   registerCare();
   save();
+  if (opened) gameEvent(EV_FEED, lovesBerry(color) ? 1 : 0);
 }
 
 void Pet::feedCandy() {
@@ -1219,6 +1228,7 @@ void Pet::clean() {
   addBond(1);
   registerCare();
   save();
+  if (opened) gameEvent(EV_CLEAN);
 }
 
 void Pet::caress() {
