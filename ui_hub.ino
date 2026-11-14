@@ -289,6 +289,7 @@ void featSceneOverlay() {
 void featMainOverlay() {
   wildMainBadge();
   rankMainNotice();   // RANK UP!, once, after a rank-up (ui_rank.ino)
+  personaMainOverlay();   // the favourite-care cheer (ui_persona.ino)
 }
 
 // A tap on the main screen, before the menu band and the pet. True = consumed.

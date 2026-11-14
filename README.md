@@ -136,6 +136,12 @@ While **awake**, per minute:
 | HYG | −1 | **−4 more per poop** on screen (max 3 poops) |
 | JOY | −1 | **−2 extra** if FOOD < 30, **−2 extra** if HYG < 30 |
 
+- A creature's **personality** nudges these while it is **awake** (never asleep, never
+  while the board is off): GLUTTON FOOD −1 more every 4th minute; SLEEPY ENE −1 more
+  every 4th minute; PLAYFUL JOY −1 more every 4th minute; TIDY JOY −1 more **every
+  minute a poop is on screen**; ENERGETIC FOOD −1 more and ENE −1 *less* every 4th
+  minute; CUDDLY and PICKY unchanged. See [Personalities](#personalities).
+
 - ~**15 %/min** chance to poop (only if FOOD > 40). Poops tank hygiene fast.
 - **Care slip-up** = letting any stat hit **≤ 10** (60-min cooldown so it counts once).
   Each slip-up **delays evolution by 1 level** and cools the bond by 1.
@@ -152,7 +158,13 @@ While **awake**, per minute:
 - 🥊 **Training bag:** trains **STRENGTH** (~4 hits = 1 pt, cap +18/session), tires it.
 - 🫧 **Bath:** clears poops, HYG → 100.
 - 👆 **Pet it:** +5 JOY + bond.
-- 🌙 **Sleep:** rest — ENE **+6/min**, needs drain ~**4× slower** with floors
+- **Personality bonuses** on top of the above (see [Personalities](#personalities)):
+  GLUTTON +6 JOY from any berry or candy · PICKY +10 JOY +2 bond from its favourite
+  berry, but other berries give only **+20 FOOD** · PLAYFUL doubles the ball game's JOY ·
+  ENERGETIC +8 JOY +1 bond per training session · TIDY +10 JOY +2 bond from a bath ·
+  CUDDLY +5 JOY +1 bond more from petting (+10 / +2) · SLEEPY +8 JOY when you put it to
+  bed with the light.
+- 🌙 **Sleep:** rest — ENE **+6/min** (**+8** for a SLEEPY creature), needs drain ~**4× slower** with floors
   (FOOD 30 / JOY 35 / HYG 45). No poops, no slip-ups, can't run away while asleep.
   **Screen off + between midnight and 06:00 puts it to sleep**, and it stays
   asleep until you turn the screen back on -- it wakes when *you* do, not at a
@@ -768,7 +780,32 @@ BACK returns to the grid. A region without its pack shows the page with
 
 #### Personalities
 
-(to be written by the personalities feature)
+Every creature rolls **one personality when it hatches** (seven, equally likely) and
+keeps it for life. It decides which care it **loves**: give it that and it gets extra
+joy (sometimes bond), the heart, and a pink **"<3 TRAIT!"** cheer on the main screen
+for 2.5 s. It also nudges its needs a little -- **only while awake**.
+
+| Trait | Loves | Bonus when it gets it | Its needs, awake |
+|---|---|---|---|
+| GLUTTON | food | **+6 JOY** from any berry or candy | FOOD −1 more every 4th minute (−2.25/min) |
+| SLEEPY | bedtime | **+8 JOY** when put to bed with the light | ENE −1 more every 4th minute; asleep ENE **+8/min** instead of +6 |
+| PLAYFUL | play | the ball game's JOY **doubled** | JOY −1 more every 4th minute |
+| TIDY | baths | **+10 JOY, +2 bond** from a bath | JOY −1 more every minute a poop is on screen |
+| CUDDLY | cuddles | petting gives **+10 JOY, +2 bond** (normally +5 / +1) | unchanged |
+| ENERGETIC | training | **+8 JOY, +1 bond** per bag or reaction session with a hit | FOOD −1 more, ENE −1 **less**, every 4th minute |
+| PICKY | its berry | favourite berry **+20 JOY, +4 bond** in all (normally +10 / +2) | unchanged -- but any other berry gives **+20 FOOD**, not +25 |
+
+- **The night is never harder.** Asleep, and while the board is switched off, a
+  personality changes nothing except SLEEPY's faster energy refill, so the sleep floors
+  (FOOD 30 / JOY 35 / HYG 45) and the offline floor (15) are exactly what they were.
+- Bond bonuses count toward the usual **+20/day** cap.
+- Shown on the creature card's first page ("GLUTTON: loves food") and, for banked
+  creatures, next to the typing on the party / box sheet. It is kept when the creature
+  joins the party or box and comes back with it if you bring it back.
+- **Eggs** have none until they hatch (daycare eggs too). A save from before this
+  version gives its current creature a personality **once**, the first time it loads.
+  Creatures already in the party or box from before have **none** and keep having none;
+  so does a wild catch, which never hatched.
 
 &nbsp;
 

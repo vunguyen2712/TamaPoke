@@ -81,6 +81,7 @@ const SaveField SAVE_FIELDS[] = {
   //
   //
   // ---- personalities (persona.cpp) -- keys go below this line
+  { "prsn", SK_U8 },    // the live pet's trait (banked ones: PartyMon::spare)
   //
   //
   // ---- two-board gifts and visits (friends.cpp) -- keys go below this line
