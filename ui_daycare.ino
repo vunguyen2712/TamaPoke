@@ -83,7 +83,7 @@ static uint8_t dcVerdict() {
 
 // One predicate for "the BREED row is live", asked by the draw AND the tap.
 static bool dcBreedLive() {
-  return dcVerdict() == BV_OK && !breedHasQueued() && !breedOnCooldown(pet.dayNumber());
+  return dcVerdict() == BV_OK && !breedHasQueued() && !breedOnCooldown(pet.currentDay());
 }
 
 void daycareHubLabel(char *out, size_t n, const char *name) {
@@ -138,7 +138,7 @@ static void renderDcHome() {
       featLine(342, l, UI_INK);
     }
   } else {
-    bool wait = breedOnCooldown(pet.dayNumber());
+    bool wait = breedOnCooldown(pet.currentDay());
     featLine(318, TL(wait ? S_DC_WAIT : S_DC_TODAY), wait ? UI_BAR_WARN : UI_INK);
     if (bag.has(ITEM_OVAL_CHARM)) featLine(342, ITEM_TBL[ITEM_OVAL_CHARM].name, 0x4C98);
   }
@@ -195,7 +195,7 @@ static void dcTapHome(int16_t x, int16_t y) {
       else if (dcVerdict() == BV_OK) dcSay(S_DC_WAIT);
       return;
     }
-    uint8_t res = breedMake(dcA, dcB, pet.dayNumber());
+    uint8_t res = breedMake(dcA, dcB, pet.currentDay());
     if (res == BR_OK) { sfxPlay(SFX_HATCH); dcSay(S_DC_MADE); }
     else sfxPlay(SFX_DENY);
     return;

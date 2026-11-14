@@ -180,8 +180,9 @@ public:
   // bits registerSpecies() sets, the shiny bit from the CATCH rather than from
   // the live pet, and saved at once. Used by wild.cpp.
   void registerCaught(int16_t dex, bool caughtShiny);
-  // today() for code outside the class (the wild encounters' day), which is
-  // private; the one definition of a day stays today().
+  // today() for code outside the class (wild encounters, the daycare cooldown,
+  // tasks), which is private; the one definition of a day stays today(), so a
+  // feature's "once a day" and the care streak can never disagree.
   uint32_t currentDay() const { return today(); }
   // The level at which `dex` may legally use learnset entry `i`. A level-up
   // move carries its own; a level-0 entry is a TM/tutor/egg move, which the
@@ -384,9 +385,6 @@ public:
   // code: the serial console already simulates rolls, and the region tests have
   // to see which creature a switch landed on.
   int16_t eggPeek() const { return eggTarget; }
-  // The daycare (breed.cpp). dayNumber() is the same day registerCare() counts,
-  // so its once-a-day cooldown and the care streak can never disagree.
-  uint32_t dayNumber() const { return today(); }
   // "Swap it in now": an UNCRACKED egg becomes the bred species. Every region's
   // answer becomes that species too, so the region pill cannot re-roll it, and
   // eggRarity() reads the new species. Its own shiny roll is kept.

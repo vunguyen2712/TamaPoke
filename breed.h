@@ -29,7 +29,7 @@
 //   Where it goes -- QUEUED (one at a time) and becomes the NEXT egg: newEgg()
 //                   takes it instead of rolling. If the live creature is an
 //                   uncracked egg it can also be swapped in at once.
-//   Cooldown     -- one breed per game day (Pet::dayNumber()).
+//   Cooldown     -- one breed per game day (Pet::currentDay()).
 //   Parents are NOT consumed.
 
 #define BREED_BANK (PARTY_SLOTS + BOX_SLOTS)   // banked index: party 0..5, box 6..23

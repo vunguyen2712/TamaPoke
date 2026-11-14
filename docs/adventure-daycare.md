@@ -9,7 +9,7 @@ The player-facing numbers are in the README, § "Daycare". This file is the why.
 | `breed.h` / `breed.cpp` | the rule and the daycare's state. Pure C++, links into every test binary |
 | `ui_daycare.ino` | the screen: HOME (parents A/B, BREED, SWAP IN NOW, the queued egg, the cooldown) and a paged PICKER |
 | `pet.cpp` | `newEgg()` takes a queued egg instead of rolling; `hatch()` passes inherited IVs to `rollIVs()` |
-| `pet.h` | `dayNumber()`, `eggSwapTo()`, private `setBredTarget()`, `rollIVs(const uint8_t *inherited)` |
+| `pet.h` | `currentDay()`, `eggSwapTo()`, private `setBredTarget()`, `rollIVs(const uint8_t *inherited)` |
 | `save.cpp` | one key, `"dcare"` |
 | `tools/emu/tests/breed_test.cpp`, `daycare_ui_test.cpp` | the logic, and the screen driven through the real sketch |
 
@@ -92,7 +92,7 @@ in `setup()`.
 
 ## Cooldown
 
-`Pet::dayNumber()` is the private `today()` that the care streak already uses,
+`Pet::currentDay()` is the private `today()` that the care streak already uses,
 so the daycare and the streak can never disagree about what "a day" is. One
 breed per day number (`day != lastDay`, the same comparison as
 `registerCare()`). With no clock the day is 0: the first breed is allowed and

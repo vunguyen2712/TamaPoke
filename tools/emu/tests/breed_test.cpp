@@ -186,7 +186,7 @@ int main() {
   const uint16_t dexBefore = pet.registeredCount();
   const uint8_t partyBefore = party.count(), boxBefore = party.boxCount();
   setDay(pet, DAY);
-  ck(pet.dayNumber() == DAY, "the game day is the clock's day");
+  ck(pet.currentDay() == DAY, "the game day is the clock's day");
 
   ck(breedCheckIdx(0, 0) == BV_SAME, "the same banked slot twice is refused");
   ck(breedCheckIdx(2, PARTY_SLOTS + 0) == BV_OK, "a party creature + a BOX creature can breed");
