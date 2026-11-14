@@ -162,7 +162,9 @@ int main() {
   ck(!btlHard, "rematches use the easy AI (the levels are the difficulty)");
   bool order = fightToWin(want, wn);
   ck(order, "all six came out, each the battle team's next");
-  ck(btlWon && btlWinUntil, "won, and the win screen is up");
+  ck(btlWon && btlWinUntil, "won, and the win screen is due");
+  // the final blow plays out on the battle screen first (ui_movefx.ino)
+  for (int i = 0; i < 200 && !on("win"); i++) pump(1);
   gfx->frameReady = false; render();
   ck(gfx->frameReady && on("win"), "the rematch win screen flushes");
   click(233, 320);

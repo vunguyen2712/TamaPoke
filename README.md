@@ -3,7 +3,7 @@
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://dylanpdao.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v3.15-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v3.16-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
 [![Stars](https://img.shields.io/github/stars/DylanPDao/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/DylanPDao/TamaPoke/stargazers)
@@ -267,6 +267,39 @@ After any ending, a **new egg** appears.
   out of the egg pool, so a partial sprite install is a supported state. A pack
   sent from the web installer is picked up **as it lands** — the region unlocks
   without a reboot.
+
+### Move effects (v3.16)
+Every move plays its own effect in its **type's colours**, with a pixel-art sprite
+per type: flames, water drops, leaves, ice shards, rocks, lightning, feathers,
+needles, orbs, sparkles and hearts.
+
+| Look | Moves |
+|---|---|
+| Beam | HYPER BEAM, SOLAR BEAM, ICE BEAM, AURORA BEAM, PSYBEAM, FLASH CANNON, DRAGON RAGE |
+| Stream of particles | FLAMETHROWER, FIRE BLAST, WATER GUN, HYDRO PUMP, SURF, BUBBLE, ACID, SLUDGE, BLIZZARD, ABSORB, MEGA DRAIN |
+| Lightning from above | THUNDERSHOCK, THUNDERBOLT, THUNDER |
+| Falling rocks | ROCK THROW, ROCK SLIDE, ANCIENTPOWER |
+| Quake (the screen shakes) | EARTHQUAKE, DIG, SEISMIC TOSS |
+| Claw slashes | SCRATCH, X-SCISSOR, DRAGON CLAW, KARATE CHOP, WING ATTACK, VINE WHIP, PLAY ROUGH |
+| Jaws | BITE, CRUNCH, BUG BITE, LEECH LIFE |
+| Rings | PSYCHIC, CONFUSION, PSYWAVE, BUG BUZZ, DAZZLE GLEAM, DARK PULSE, NIGHT SHADE, MOONBLAST |
+| Repeated hits | multi-hit moves, one burst per hit |
+| Rising arrows (in the stat's colour) | moves that raise your own stats |
+| Notes or sparks, then falling arrows | moves that lower the foe's stats |
+| Green sparkles | RECOVER, SOFT-BOILED |
+| Contact burst | every other physical move |
+| Thrown projectile | every other special move |
+
+- **Impact burst.** Every hit that lands ends in a flash ring, a star and the type's
+  particles flung outward. **Super effective** throws more particles and knocks the
+  target about. A **critical hit** adds white speed lines.
+- **Draining moves** send green orbs back to the user.
+- **Misses.** A missed move sails past the target and has no burst.
+- **One timeline per turn.** The second move starts only after the first has played.
+  Each creature flinches, and its HP bar starts draining, at the moment the blow
+  lands. A knocked-out creature sinks only after the final hit, and the win screen
+  waits for that too.
+- The effects are cosmetic only: a fight resolves exactly as before.
 
 ### Battle stats & IVs
 Every pet rolls four **IVs** (individual values, 0–31) at hatch — ATK / DEF / SPD /
