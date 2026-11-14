@@ -241,6 +241,10 @@ int main() {
   squadMask = 0x3;                       // two ticked
   pickFight();
   ck(!battleOpen, "SOLO: two creatures are refused");
+  pickOpen = false; btlSquadN = 0;
+  challengePickFight();                  // buildSquad would quietly trim two to one
+  ck(!battleOpen && btlSquadN == 0, "SOLO: the start refuses two as well, rather than trimming");
+  pickOpen = true;
   pickDefault(1);
   pickFight();
   ck(battleOpen && btlSquadN == 1 && btlFoeTeamN == 1, "SOLO: one against the leader's ace");
