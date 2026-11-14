@@ -147,11 +147,29 @@ int main(){
     ck(jo==500, "with its pack back, JOHTO spawns only Johto"); }
 
   // ---------------- catch chance ----------------
-  ck(wildCatchChance(16,ITEM_POKEBALL)==45 && wildCatchChance(16,ITEM_GREATBALL)==67 &&
-     wildCatchChance(16,ITEM_ULTRABALL)==90, "common: 45 / 67 / 90");
+  // one throw carries what three used to: 1 - (1 - p)^3 over the old table
+  ck(wildCatchChance(16,ITEM_POKEBALL)==83 && wildCatchChance(16,ITEM_GREATBALL)==95 &&
+     wildCatchChance(16,ITEM_ULTRABALL)==95, "common: 83 / 95 / 95 (one throw = the old three)");
   { int16_t rare=0; for (int16_t d=1; d<=DEX_COUNT && !rare; d++) if (DEX_TBL[d].rarity==R_RARO) rare=d;
-    ck(wildCatchChance(rare,ITEM_POKEBALL)==20 && wildCatchChance(rare,ITEM_ULTRABALL)==40, "rare: 20 / 40"); }
-  ck(wildCatchChance(17,ITEM_POKEBALL)==30, "an evolved common: 30");
+    ck(wildCatchChance(rare,ITEM_POKEBALL)==48 && wildCatchChance(rare,ITEM_ULTRABALL)==78, "rare: 48 / 78"); }
+  ck(wildCatchChance(17,ITEM_POKEBALL)==65, "an evolved common: 65");
+  // ...and it IS the old odds of three throws, for every species and ball
+  { int off=0; for (int16_t d=1; d<=DEX_COUNT; d++) for (uint8_t b=ITEM_POKEBALL;b<=ITEM_ULTRABALL;b++) {
+      uint8_t r=DEX_TBL[d].rarity; uint32_t base = r==R_COMUN?45 : r==R_RARO?20 : 5;
+      if (r==R_EVO) continue;                     // the evolved rows are checked above
+      uint32_t p=base*ITEM_TBL[b].power/10; if (p>90) p=90;
+      double three = 100.0*(1.0 - (1-p/100.0)*(1-p/100.0)*(1-p/100.0));
+      int want = three > WILD_CATCH_CAP ? WILD_CATCH_CAP : (int)three;
+      if (abs((int)wildCatchChance(d,b) - want) > 1) off++; }
+    ck(off==0, "one throw = the chance of catching it in three of the old throws"); }
+  // the shakes: three for a catch, fewer the further the miss
+  ck(wildShakesFor(83, 0)==WILD_SHAKES && wildShakesFor(83, 82)==WILD_SHAKES, "a catch shakes three times");
+  ck(wildShakesFor(83, 83) < WILD_SHAKES, "a miss never shakes three times");
+  { bool mono=true; uint8_t prev=WILD_SHAKES; for (int r=48; r<100; r++){ uint8_t k=wildShakesFor(48,(uint8_t)r); if (k>prev) mono=false; prev=k; }
+    ck(mono, "the nearer the miss, the more it shakes (never more for a worse roll)"); }
+  ck(wildShakesFor(48, 48)==WILD_SHAKES-1 && wildShakesFor(48, 99)==0, "a near miss shakes twice; a hopeless one bursts at once");
+  { int seen[WILD_SHAKES+1]={0}; for (int r=0;r<100;r++) seen[wildShakesFor(50,(uint8_t)r)]++;
+    ck(seen[0] && seen[1] && seen[2] && seen[3], "every shake count 0..3 happens"); }
   ck(wildCatchChance(16,ITEM_ORAN_BERRY)==0, "a berry is not a ball");
   { int over=0; for (int16_t d=1; d<=DEX_COUNT; d++) for (uint8_t b=ITEM_POKEBALL;b<=ITEM_ULTRABALL;b++) if (wildCatchChance(d,b)>WILD_CATCH_CAP) over++;
     ck(over==0, "never above the cap"); }
@@ -240,13 +258,13 @@ int main(){
     ck(there, "the catch survives a reload (Party::begin reads NVS)");
     Pet p3; p3.begin(); ck(p3.isRegistered(met), "...and so does its Pokedex entry"); }
 
-  // misses, then it flees
+  // one throw decides it: a miss and it runs away at once
   wild.roll(DAY0, at(DAY0,13), 0, 30, false); wild.fightStarted(); wild.battleEnded(true,false,99,bag);
   balls = bag.count(ITEM_POKEBALL);
-  uint8_t r1=wild.throwBall(ITEM_POKEBALL,99,party,bag,pp), r2=wild.throwBall(ITEM_POKEBALL,99,party,bag,pp),
-          r3=wild.throwBall(ITEM_POKEBALL,99,party,bag,pp);
-  ck(r1==WTH_MISSED && r2==WTH_MISSED && r3==WTH_FLED, "two misses, and the third throw it flees");
-  ck(bag.count(ITEM_POKEBALL)==balls-3 && wild.st.phase==WP_NONE && wild.left()==1, "three balls spent and so is the encounter");
+  uint8_t r1=wild.throwBall(ITEM_POKEBALL,99,party,bag,pp);
+  ck(r1==WTH_FLED, "a miss: it breaks free and runs away");
+  ck(bag.count(ITEM_POKEBALL)==balls-1 && wild.st.phase==WP_NONE && wild.left()==1, "one ball spent and so is the encounter");
+  ck(wild.throwBall(ITEM_POKEBALL,0,party,bag,pp)==WTH_NONE && bag.count(ITEM_POKEBALL)==balls-1, "no second throw at a creature that is gone");
 
   // party full -> box
   for (int i=0;i<PARTY_SLOTS;i++) if (party.slots[i].empty()){ PartyMon m; m.dex=19; m.level=5; party.add(m); }

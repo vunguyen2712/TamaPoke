@@ -3,6 +3,7 @@
 #include "types.h"
 #include "items.h"
 #include "game_events.h"
+#include "pet.h"     // moveUnlockLevel(): the one level gate for a learnset entry
 
 // ---------- building a combatant ----------
 
@@ -366,4 +367,36 @@ uint8_t aiChooseMove(const Combatant &self, const Combatant &foe, bool smart) {
     if (sc > bestScore) { bestScore = (int16_t)sc; best = mv; }
   }
   return best;
+}
+
+// ---------- foes always fight back ----------
+
+bool moveDamages(uint8_t mv) {
+  return mv && mv < MOVE_COUNT && MOVE_TBL[mv].cat != MC_STATUS && MOVE_TBL[mv].power > 0;
+}
+
+void foeEnsureAttack(Combatant &c) {
+  for (uint8_t i = 0; i < MOVE_SLOTS; i++)
+    if (moveDamages(c.moves[i])) return;
+  uint8_t best = 0, bestPow = 0;
+  for (uint8_t i = 0, n = learnCount(c.dex); i < n; i++) {
+    // moveUnlockLevel(), the same gate relearnFromLevel() and the move picker
+    // use: a foe gets nothing it could not have learned by its level.
+    if (moveUnlockLevel(c.dex, i) > c.level) continue;
+    uint8_t mv = learnMove(c.dex, i);
+    if (moveDamages(mv) && MOVE_TBL[mv].power > bestPow) { best = mv; bestPow = MOVE_TBL[mv].power; }
+  }
+  if (!best) best = MV_STRUGGLE;
+  for (uint8_t i = 0; i < MOVE_SLOTS; i++)
+    if (!c.moves[i]) { c.moves[i] = best; return; }
+  for (uint8_t i = MOVE_SLOTS; i-- > 0;)      // every slot is a status move
+    if (!moveDamages(c.moves[i])) { c.moves[i] = best; return; }
+}
+
+uint8_t aiChooseMoveWild(const Combatant &self, uint8_t attackPct) {
+  uint8_t dmg[MOVE_SLOTS], nd = 0;
+  for (uint8_t i = 0; i < MOVE_SLOTS; i++)
+    if (moveDamages(self.moves[i])) dmg[nd++] = self.moves[i];
+  if (nd && (uint8_t)random(100) < attackPct) return dmg[random(nd)];
+  return aiChooseMove(self, self, false);   // any legal move, uniformly
 }

@@ -86,9 +86,17 @@ GHOST/DARK/POISON 31% at night vs 10% by day.
 
 ## Catching
 
-Chance = rarity base (45 / 20 / 30 / 13) x ball power / 10, capped at 90.
-`ItemInfo.power` already holds the multiplier x10 (10/15/20). Three throws;
-the third miss flees. Room is checked BEFORE the ball is taken, so a full party
+ONE throw decides it (v3.15; it used to be three throws). Per-throw chance
+p = rarity base (45 / 20 / 30 / 13) x ball power / 10, capped at 90 -- the old
+table -- and the throw lands with 1 - (1 - p)^3, the old odds of catching it at
+all, capped at 95 (`WILD_CATCH_CAP`). `wildShakesFor(chance, roll)` is the one
+answer to how many times the ball shakes: 3 for a catch, else 0..2 by how near
+the roll came. ui_wild.ino replays it as an animation (throw, draw in, drop,
+shakes, then click + sparkles or burst + flee); the result is saved by
+`throwBall()` BEFORE the first frame, taps are ignored while it plays and
+leaving the screen drops it -- nothing replays, nothing is thrown twice.
+The ball sprites (POKE / GREAT / ULTRA) are one 16x16 map with three palettes
+(`BALL_MAP`, `BALL_PAL`), rotated at draw time for the throw spin and the shake. Room is checked BEFORE the ball is taken, so a full party
 and box costs nothing. The caught creature is built like `foeFromSpecies()`
 builds the battle's opponent: a scratch `Pet` (never `begin()`'d, so it cannot
 write NVS) hatched as the species, aged to the level, `relearnFromLevel()`.

@@ -3,7 +3,7 @@
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://dylanpdao.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v3.14-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v3.15-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
 [![Stars](https://img.shields.io/github/stars/DylanPDao/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/DylanPDao/TamaPoke/stargazers)
@@ -391,19 +391,26 @@ ADVENTURE -> **WILD**. The row shows how many encounters are left today
 | Evolved forms | only if the wild level has reached the level its predecessor evolves at (Pidgeotto from 18). Second branches of split evolutions other than Eevee's never appear |
 | Shiny | **1 in 256**, **2 in 256** with the SHINY CHARM |
 | Options | **FIGHT** (needs a hatched pet) or **RUN**. A lost fight, RUN, or a reset mid-fight spends the encounter |
+| The fight | Wild creatures fight back: every foe knows at least one damaging move (its strongest legal one, else STRUGGLE), and picks a damaging move **80%** of the time |
 | Win drop | ORAN BERRY **20%**, SITRUS BERRY **5%**, LUM BERRY **3%** |
 
-After a win, throw up to **3 balls**; after the third miss it flees. LET GO
-gives up. A beaten creature waits (even overnight) until you throw or let go.
+After a win you throw **one ball**, and it decides everything: it flies at
+the creature, draws it in, drops and **shakes up to 3 times**. Three shakes and
+a click: **caught**. Fewer, and it **bursts out and runs away** -- the nearer
+the miss, the more it shakes first (0, 1 or 2 shakes). LET GO gives up instead.
+A beaten creature waits (even overnight) until you throw or let go.
 
-| Catch chance | POKE BALL (x1.0) | GREAT BALL (x1.5) | ULTRA BALL (x2.0) |
+One throw carries what three throws used to: chance = 1 - (1 - p)^3, where p is
+the old per-throw odds (rarity base 45 / 20 / 30 / 13 x the ball, capped at 90).
+
+| Catch chance (one throw) | POKE BALL | GREAT BALL | ULTRA BALL |
 |---|---|---|---|
-| Common base form | 45% | 67% | 90% |
-| Rare base form | 20% | 30% | 40% |
-| Evolved, common line | 30% | 45% | 60% |
-| Evolved, rare line | 13% | 19% | 26% |
+| Common base form | 83% | 95% | 95% |
+| Rare base form | 48% | 65% | 78% |
+| Evolved, common line | 65% | 83% | 93% |
+| Evolved, rare line | 34% | 46% | 59% |
 
-Capped at **90%**. A catch joins the **party**, else the **box**, at its wild
+Capped at **95%**. A catch joins the **party**, else the **box**, at its wild
 level (frozen, like every banked creature), with random IVs (4-31; a shiny's
 floor is 20), the learnset's moves for that level and no nickname, and is
 registered in the Pokedex. With party **and** box full you are told so and the
