@@ -199,6 +199,14 @@ const PartyMon *breedBanked(uint8_t idx) {
   return nullptr;
 }
 
+bool breedPossible() {
+  if (breedHasQueued()) return false;
+  for (uint8_t a = 0; a < BREED_BANK; a++)
+    for (uint8_t b = a + 1; b < BREED_BANK; b++)
+      if (breedCheckIdx(a, b) == BV_OK) return true;
+  return false;
+}
+
 BreedVerdict breedCheckIdx(uint8_t ia, uint8_t ib) {
   const PartyMon *a = breedBanked(ia), *b = breedBanked(ib);
   if (!a || !b) return BV_EMPTY;

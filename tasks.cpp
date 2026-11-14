@@ -5,6 +5,7 @@
 #include "dex.h"
 #include "trainers.h"
 #include "game_events.h"
+#include "breed.h"
 
 // ---------- the tables ----------
 //
@@ -169,7 +170,7 @@ TaskWorld taskWorldOf(const Pet &p) {
     if (itemIsBall(i)) w.hasBall = true;
     if (itemIsHeld(i)) w.hasHeld = true;
   }
-  w.canBreed = party.count() >= 2;
+  w.canBreed = breedPossible();   // the daycare's own rule: a compatible pair, no egg queued
   return w;
 }
 

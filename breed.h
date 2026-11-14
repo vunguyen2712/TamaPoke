@@ -75,6 +75,10 @@ BreedVerdict breedCheckIdx(uint8_t ia, uint8_t ib);
 bool breedOnCooldown(uint32_t day);            // true = already bred today
 BreedResult breedMake(uint8_t ia, uint8_t ib, uint32_t day);   // emits EV_BREED
 bool breedHasQueued();
+// Could a breed happen at all right now: no egg already queued, and some
+// compatible pair among the banked creatures. The tasks feature asks this
+// before offering a BREED task, so it can never offer an impossible one.
+bool breedPossible();
 const BredEgg &breedQueued();
 const BredEgg &breedLive();                    // the bred egg currently on screen, if any
 bool breedQueuedHatchable();                   // the queued species can still hatch here
