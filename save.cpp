@@ -50,6 +50,9 @@ const SaveField SAVE_FIELDS[] = {
   //
   //
   // ---- held items, friendship, dex rewards (items.cpp) -- keys go below this line
+  { "hitm", SK_U8 },    // the live pet's held item (banked ones: inside "party"/"box")
+  { "dxrw", SK_U8 },    // Pokedex rewards granted: bit0 SHINY CHARM, bit1 OVAL CHARM
+  { "dxgf", SK_U8 },    // how many every-25 dex gifts have been paid
   //
 };
 const uint16_t SAVE_FIELD_COUNT = sizeof(SAVE_FIELDS) / sizeof(SAVE_FIELDS[0]);

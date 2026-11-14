@@ -5,6 +5,7 @@
 #include "noart.h"   // speciesHasArt(): the egg pool skips what cannot be drawn
 #include "audio.h"
 #include "game_events.h"
+#include "items.h"    // held items, friendship evolution, the shiny charm
 
 // Reads a blob that may be LONGER than the array we are reading it into.
 //
@@ -74,6 +75,7 @@ void Pet::newEgg() {
   // sorteo shiny: 1/48 base, mejor con despedida y con racha/vinculo altos
   int shinyBase = (lastEnd == CER_FAREWELL ? 24 : 48) - careBonus();
   if (shinyBase < 8) shinyBase = 8;
+  shinyBase = shinyCharmOdds(shinyBase);   // the SHINY CHARM halves it (items.cpp)
   eggShiny = (random(shinyBase) == 0);
   // The debt lands on the creature about to hatch, and is spent doing so --
   // it is a one-day penalty, not a running total that compounds each retire.
@@ -261,6 +263,7 @@ void Pet::reviveFrom(const PartyMon &m) {
   ivAtk = m.ivAtk; ivDef = m.ivDef; ivSpe = m.ivSpe; ivHp = m.ivHp;
   trAtk = m.trAtk; trDef = m.trDef; trSpe = m.trSpe;
   for (int i = 0; i < MOVE_SLOTS; i++) moves[i] = m.moves[i];
+  held = itemIsHeld(m.held) ? m.held : ITEM_NONE;   // its item comes back with it
   // its banked level expressed as an age, so level() needs no special case
   ageMinutes = (uint32_t)(m.level ? m.level - 1 : 0) * MINUTES_PER_LEVEL;
   lastLearnLevel = level();     // do not replay every gate it already passed
@@ -286,15 +289,22 @@ void Pet::reviveFrom(const PartyMon &m) {
 void Pet::snapshotForParty() {
   endedKind = CER_NONE;
   if (isEgg()) return;
-  if (ceremony != CER_FAREWELL && ceremony != CER_RELEASE) return;
+  // Every ending passes through here just before newEgg(), banked or not, so
+  // this is THE one place the live creature's item is settled: it goes along
+  // into the party when the creature is banked, and back into the bag when the
+  // creature is not (a runaway, an early retire). Never onto the next egg.
+  uint8_t item = held;
+  held = ITEM_NONE;
+  if (ceremony != CER_FAREWELL && ceremony != CER_RELEASE) { heldReturn(item); return; }
   // An EARLY retire gives the creature up for good -- it is not banked at all.
   // Retiring one that has EARNED its farewell still banks it, because that is
   // simply the farewell reached by another button. retirePending is still set
   // here: update() snapshots before newEgg() spends it, and that ordering is
   // what this depends on, so retire_test drives the real update() rather than
   // calling the two halves by hand.
-  if (retireIsEarly()) return;
+  if (retireIsEarly()) { heldReturn(item); return; }
   endedMon = PartyMon();
+  endedMon.held = itemIsHeld(item) ? item : ITEM_NONE;
   endedMon.dex = speciesId;
   endedMon.level = level();
   endedMon.medals = medals;
@@ -971,30 +981,29 @@ void Pet::hatch() {
 // (ninguna estadistica por debajo de 40). NO evoluciona sola: la dispara el
 // usuario tocando al bicho (evolve()), para que vea la transformacion.
 bool Pet::canEvolveNow() const {
-  if (frozen) return false;     // frozen at the form it was banked in
-  if (isEgg() || sleeping || ceremony != CER_NONE) return false;
-  const DexEntry &d = DEX_TBL[speciesId];
-  if (d.evolvesTo == 0) return false;
-  // evoPen is the day owed for retiring the PREVIOUS creature early. It rides
-  // on the same threshold careMistakes already moves, so there is one rule for
-  // "this creature evolves later" rather than two that can disagree.
-  return level() >= (uint16_t)(d.evolveLevel + careMistakes + evoPen) &&
-         lowestStat() >= 40;
+  // THE rule lives in evoCheck() (items.cpp): level + care mistakes + the
+  // retire debt, care right now, frozen/asleep/ceremony, and -- for the species
+  // that evolve by friendship -- the bond. The card's progress page asks the
+  // same function, so it cannot promise an evolution this refuses.
+  return evoCheck(*this).block == EVO_OK;
 }
 
 void Pet::evolve() {
-  if (!canEvolveNow()) return;
+  EvoCheck ec = evoCheck(*this);
+  if (ec.block != EVO_OK) return;
   const DexEntry &d = DEX_TBL[speciesId];
   prevSpeciesId = speciesId;
-  int16_t next = d.evolvesTo;
-  if (speciesId == DEX_EEVEE) {
+  int16_t next = ec.target ? ec.target : (int16_t)d.evolvesTo;
+  if (speciesId == DEX_EEVEE && !ec.target) {
     // Eevee's branch: all eight, preferring one still missing from the Pokedex,
     // which is what makes raising Eevees a collection goal rather than a
     // coin flip. Only ones this player can actually be shown -- see
     // eeveeOptions(). If none qualify the table's own 134 stands, so a card with
     // no packs at all still evolves rather than freezing.
+    // A BONDED Eevee was settled by evoCheck() (Espeon by day, Umbreon at
+    // night); this is the level branch, which leaves those two to friendship.
     int16_t opts[EEVEE_EVO_COUNT];
-    uint8_t n = eeveeOptions(opts);
+    uint8_t n = eeveeLevelOptions(*this, opts);
     if (n) {
       int16_t fresh[EEVEE_EVO_COUNT];
       uint8_t m = 0;
@@ -1313,6 +1322,7 @@ void Pet::save() {
   prefs.putUShort("shi", strHi);
   prefs.putUShort("qhi", spdHi);
   prefs.putString("nick", nick);
+  prefs.putUChar("hitm", held);
 }
 
 void Pet::load() {
@@ -1379,6 +1389,8 @@ void Pet::load() {
   strHi = prefs.getUShort("shi", 0);
   spdHi = prefs.getUShort("qhi", 0);
   prefs.getString("nick", nick, sizeof(nick));
+  held = prefs.getUChar("hitm", ITEM_NONE);
+  if (!itemIsHeld(held) || isEgg()) held = ITEM_NONE;   // absent on older saves
   // Moves load last: relearnFromLevel() needs speciesId and ageMinutes, both of
   // which are read above. A save from before moves existed has no "mvs" key and
   // leaves the array zeroed, so an established pet is handed the moveset it

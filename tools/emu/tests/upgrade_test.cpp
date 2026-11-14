@@ -93,6 +93,17 @@ int main(){
       snprintf(op[i].nick, sizeof(op[i].nick), "OLD%d", i);
     }
     p.putBytes("party", op, sizeof(op));
+    // and a box in the layout of the build just before held items (30-byte
+    // records): the box key is younger than the 26-byte party, so a real old
+    // save that has one has it at this stride
+    static uint8_t ob[BOX_SLOTS * PARTYMON_V2_SIZE];
+    memset(ob, 0, sizeof(ob));
+    for (int i = 0; i < 3; i++) {
+      PartyMon m; m.dex = (int16_t)(130 + i); m.level = (uint16_t)(60 + i); m.moves[0] = 2;
+      snprintf(m.nick, sizeof(m.nick), "BOX%d", i);
+      memcpy(ob + (i * 2) * PARTYMON_V2_SIZE, &m, PARTYMON_V2_SIZE);   // slots 0, 2, 4
+    }
+    p.putBytes("box", ob, sizeof(ob));
     p.end();
     printf("      wrote an old save: %zu-byte party records, 19-byte dex\n",
            sizeof(OldPartyMon));
@@ -144,7 +155,11 @@ int main(){
     if (pty.slots[i].moves[0] || pty.slots[i].moves[3]) freshMoves = false;
   ck(freshMoves, "the moveset a pre-moves save never had comes up empty, not garbage");
   ck(pty.slots[1].shiny, "a banked shiny is still shiny");
-  ck(pty.boxCount() == 0, "the box, which did not exist then, comes up empty");
+  ck(pty.boxCount() == 3 && pty.box[2].dex == 131 && pty.box[4].level == 62 &&
+     !strcmp(pty.box[4].nick, "BOX2") && pty.box[0].moves[0] == 2,
+     "a box from before held items keeps its creatures in their slots");
+  ck(!pty.box[0].held && !pty.box[2].held && !pty.slots[0].held,
+     "and every banked creature, party or box, comes up holding nothing");
 
   // the new settings take their defaults rather than garbage
   ck(pet.region < REGION_COUNT, "the egg region defaults sanely");
@@ -157,7 +172,7 @@ int main(){
     pet.factoryReset();
     ck(saveImport(buf, n), "and imports again");
     Pet p2; Party q2; p2.begin(); q2.begin();
-    ck(p2.speciesId == 59 && !strcmp(p2.nick, "BLAZE") && q2.count() == 4,
+    ck(p2.speciesId == 59 && !strcmp(p2.nick, "BLAZE") && q2.count() == 4 && q2.boxCount() == 3,
        "with the upgraded contents intact");
   }
 

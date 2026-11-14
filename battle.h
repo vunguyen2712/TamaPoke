@@ -28,6 +28,13 @@ struct Combatant {
   uint8_t charging = 0;      // EF_CHARGE move already wound up
   bool shiny = false;        // which sprite variant to stream
   char name[12] = "";
+  // Held item (items.h). `itemUsed` makes every once-per-battle item fire only
+  // once, and stays with this copy through switches. `holder` names the stored
+  // creature it was built from (HOLDER_PET / HOLDER_PARTY(i)), so a spent
+  // berry can be removed from THAT creature; -1 for foes and link fights.
+  uint8_t held = 0;
+  bool itemUsed = false;
+  int8_t holder = -1;
 
   bool fainted() const { return hp == 0; }
 };
@@ -52,6 +59,10 @@ struct TurnLog {
   bool charged = false;    // spent the turn winding up
   bool healed = false;
   bool targetFainted = false;
+  // A held item that triggered during this action, on either side, so the
+  // UI can narrate it. In battleEndTurn() it is the creature's own (atkItem).
+  uint8_t atkItem = 0;
+  uint8_t defItem = 0;
 };
 
 uint16_t stagedStat(uint16_t base, int8_t stage);
@@ -60,13 +71,16 @@ uint16_t battleDamage(const Combatant &atk, const Combatant &def, uint8_t mv,
 
 // True if `a` using `ma` acts before `b` using `mb`. Priority first, then the
 // staged speed, and paralysis halves it.
+// A held QUICK CLAW gets a 20% roll to jump the speed order (never priority).
+// `claw`, if given, reports which side's claw fired: 1 = a, 2 = b, 0 = none.
 bool battleMovesFirst(const Combatant &a, uint8_t ma,
-                      const Combatant &b, uint8_t mb);
+                      const Combatant &b, uint8_t mb, uint8_t *claw = nullptr);
 
 // One creature's action. Applies damage, ailments, stat stages and recoil.
 void battleAct(Combatant &atk, Combatant &def, uint8_t mv, TurnLog &log);
 
-// Burn and poison chip damage, applied to one creature after both have acted.
+// Burn and poison chip damage, applied to one creature after both have acted,
+// then LEFTOVERS (and a berry, if the chip took it to half).
 void battleEndTurn(Combatant &c, TurnLog &log);
 
 // Picks the attacker's move. `smart` is what separates hard mode from easy:

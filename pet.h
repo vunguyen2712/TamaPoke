@@ -197,6 +197,11 @@ public:
   // level() working untouched rather than needing a second source of truth.
   bool frozen = false;
   void reviveFrom(const PartyMon &m);
+  // The item this creature holds (ItemId, items.h; 0 = nothing). PER-CREATURE:
+  // it goes into the party with snapshotForParty(), comes back with
+  // reviveFrom(), and a creature that ends without being banked hands it back
+  // to the bag. Saved under "hitm".
+  uint8_t held = 0;
 
   // The player's own name, alongside the badges and the streak: it belongs to
   // whoever is playing, not to the creature, so newEgg() must never clear it.
