@@ -68,6 +68,7 @@ const SaveField SAVE_FIELDS[] = {
   //
   // ---- weekly gym challenge (challenge.cpp) -- keys go below this line
   //
+  { "chal", SK_BYTES },    // this week's leader, rule, won flag, week, weeks cleared (12 B)
   //
   // ---- weather overlay and habitat view -- keys go below this line
   //

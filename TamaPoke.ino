@@ -468,6 +468,8 @@ bool pickOpen = false;
 #define PICK_LAN 0xFF
 // The tower's 3 vs 3 at level 50 (ui_tower.ino). Also not a trainer index.
 #define PICK_TOWER 0xFE
+// The weekly gym challenge (ui_challenge.ino): only the creatures its rule allows.
+#define PICK_CHALLENGE 0xFD
 static void lanOffer(bool host);
 uint8_t pickTrainer = 0;
 bool pickHard = false;
@@ -3442,6 +3444,7 @@ static void buildSquad(uint8_t maxLvl, uint8_t maxCount, uint16_t mask, uint8_t 
 // How many you may bring: the leader's own count in hard mode, six otherwise.
 uint8_t squadCap(uint8_t idx, bool hard) {
   if (idx == PICK_TOWER) return TOWER_TEAM;
+  if (idx == PICK_CHALLENGE) return challengePickCap();
   if (idx >= TRAINER_COUNT) return TRAINER_TEAM_MAX;
   return hard ? TRAINERS[idx].count : TRAINER_TEAM_MAX;
 }
@@ -4551,6 +4554,8 @@ void renderSpeed() {
 
 // candidate n: 0 = the live pet, 1..PARTY_SLOTS = banked members
 bool pickExists(uint8_t n) {
+  // the weekly challenge offers only what its rule allows (ui_challenge.ino)
+  if (pickTrainer == PICK_CHALLENGE && !challengePickAllows(n)) return false;
   if (n == 0) return !pet.isEgg();
   return n <= PARTY_SLOTS && !party.slots[n - 1].empty();
 }
@@ -4629,6 +4634,8 @@ void renderPick() {
              lanWantHost ? T(S_LAN_HOST) : T(S_LAN_JOIN));
   } else if (pickTrainer == PICK_TOWER || pickRematch) {
     top = pickFoeHeader(head, sizeof(head));   // ui_tower.ino
+  } else if (pickTrainer == PICK_CHALLENGE) {
+    top = challengePickHeader(head, sizeof(head));   // ui_challenge.ino
   } else {
     const Trainer &t = TRAINERS[pickTrainer];
     for (int k = 0; k < t.count; k++)
@@ -4662,7 +4669,8 @@ void renderPick() {
     else gfx->drawCircle(dx, 332, 4, UI_INK);
   }
 
-  bool ok = pickChosen() > 0 && pickChosen() <= cap;
+  bool ok = pickChosen() > 0 && pickChosen() <= cap &&
+            (pickTrainer != PICK_CHALLENGE || challengePickOk());
   gfx->fillRoundRect(PICK_BACK_X, PICK_GO_Y, PICK_BTN_W, PICK_BTN_H, 12, UI_TRACK);
   gfx->drawRoundRect(PICK_BACK_X, PICK_GO_Y, PICK_BTN_W, PICK_BTN_H, 12, UI_INK);
   gfx->setTextColor(UI_INK);
@@ -4687,7 +4695,7 @@ void pickTap(int16_t x, int16_t y) {
     sfxPlay(SFX_TAP);
     pickOpen = false;
     if (pickTrainer == PICK_LAN) { lanOpen = true; }
-    else if (pickTrainer == PICK_TOWER) { /* the tower screen is still up */ }
+    else if (pickTrainer == PICK_TOWER || pickTrainer == PICK_CHALLENGE) { /* its screen is still up */ }
     else { gymOpen = true; }
     return;
   }
@@ -4695,6 +4703,7 @@ void pickTap(int16_t x, int16_t y) {
       x >= PICK_GO_X && x <= PICK_GO_X + PICK_BTN_W) {
     uint8_t cap = squadCap(pickTrainer, pickHard);
     if (pickChosen() == 0 || pickChosen() > cap) return;   // GO stays inert
+    if (pickTrainer == PICK_CHALLENGE && !challengePickOk()) { sfxPlay(SFX_DENY); return; }
     sfxPlay(SFX_TAP);
     pickOpen = false;
     if (pickTrainer == PICK_LAN) {
@@ -4707,6 +4716,7 @@ void pickTap(int16_t x, int16_t y) {
       return;
     }
     if (pickTrainer == PICK_TOWER) { towerPickFight(); return; }   // ui_tower.ino
+    if (pickTrainer == PICK_CHALLENGE) { challengePickFight(); return; }   // ui_challenge.ino
     if (pickRematch) { rematchStartBattle(pickTrainer); return; }
     startTrainerBattle(pickTrainer, pickHard);
     return;

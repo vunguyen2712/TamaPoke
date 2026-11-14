@@ -604,7 +604,42 @@ The SHINY CHARM halves the egg's shiny roll: 1/48 -> 1/24, and the best case
 
 #### Weekly gym challenge
 
-(to be written by the weekly gym challenge feature)
+ADVENTURE -> page 2 -> **CHALLENGE**. Locked (greyed, reading CHALLENGE: WIN A
+BADGE) until you hold at least one gym badge, in any region, on either
+difficulty.
+
+- **One a week.** Weeks start on **Monday**, the same weeks the weekly tasks
+  use. The week's leader and rule are drawn the first time you look that week
+  and then stay put until Monday.
+- **The leader** is one of the eight gym leaders (never the Elite 4 or a
+  champion) from a region whose sprite pack is on the card, and only a leader
+  you have reached on that ladder: the first, or one whose predecessor you have
+  beaten. If the leader's pack later leaves the card, the week is re-drawn
+  (a cleared week stays cleared).
+- **The rule** rotates with the week through this table, skipping a rule you
+  could not meet:
+
+  | rule | you bring | the leader brings |
+  |---|---|---|
+  | TYPE ONLY: X | 1-6, every one of type X (either of its two types) | the real team |
+  | LEVEL CAP N | 1-6, each fighting at level N at most | the real team, every member AT level N |
+  | SOLO | exactly 1 | its ace alone (highest level) |
+  | NO HELD ITEMS | 1-6; held items do nothing and are never spent | the real team |
+  | TRIO | exactly 3 | its last three (fewer if it has fewer) |
+
+  X is always a type one of your creatures had when the week was drawn, and
+  TRIO is only drawn if you had three creatures. N is the leader's best level
+  minus a quarter (rounded down), never below 5: KOGA (best 43) is LEVEL CAP 33.
+  Outside LEVEL CAP your creatures are capped to the leader's best level, as in
+  the gyms. The leader's IVs are **20**, with the easy AI.
+- **The picker** opens in challenge mode and offers only creatures the rule
+  allows; FIGHT stays grey until the squad is legal, and the fight refuses to
+  start with one that is not. Level caps and NO HELD ITEMS apply to the
+  fighting copies only: nothing stored changes.
+- **Reward, once a week**: **3 ULTRA BALL + one held item**, rotating by week
+  through LEFTOVERS, FOCUS SASH, QUICK CLAW, SITRUS BERRY, LUM BERRY. The row
+  then reads DONE until Monday. A loss or a RUN costs nothing: retry as often as
+  you like that week. No badge and no training are ever awarded by it.
 
 &nbsp;
 
