@@ -5,6 +5,7 @@
 #include "noart.h"   // speciesHasArt(): the egg pool skips what cannot be drawn
 #include "audio.h"
 #include "game_events.h"
+#include "breed.h"     // a daycare egg replaces the roll in newEgg()/hatch()
 
 // Reads a blob that may be LONGER than the array we are reading it into.
 //
@@ -70,6 +71,11 @@ void Pet::newEgg() {
   for (int i = 0; i < REGION_COUNT; i++) eggByRegion[i] = 0;
   eggTarget = pickEggSpecies();  // especie oculta segun rareza y pokedex
   eggByRegion[region % REGION_COUNT] = eggTarget;
+  // A daycare egg waiting in the queue IS this egg (breed.cpp). The player's
+  // own Pet only: a scratch Pet must never spend it.
+  int16_t bredDex = 0;
+  bool bredShiny = false;
+  if (opened && breedTakeQueued(bredDex, bredShiny)) setBredTarget(bredDex);
   starterPick = (registeredCount() == 0);  // primera partida: el jugador elige inicial
   // sorteo shiny: 1/48 base, mejor con despedida y con racha/vinculo altos
   int shinyBase = (lastEnd == CER_FAREWELL ? 24 : 48) - careBonus();
@@ -90,6 +96,7 @@ void Pet::newEgg() {
   mistakeCooldown = 0;
   sleeping = false;
   frozen = false;
+  if (bredShiny) eggShiny = true;   // both parents shiny: the daycare's own roll
   save();
 }
 
@@ -826,12 +833,15 @@ uint8_t Pet::ivFromGene(uint8_t gene) const {
   return 8 + (uint8_t)(((uint16_t)(gene - 90) * 23) / 20);
 }
 
-void Pet::rollIVs() {
+void Pet::rollIVs(const uint8_t *inherited) {
   int bonus = careBonus();
-  ivAtk = rollIV(bonus);
-  ivDef = rollIV(bonus);
-  ivSpe = rollIV(bonus);
-  ivHp = rollIV(bonus);
+  // A daycare egg brings the IVs its parents decided; the rest are rolled.
+  #define IV_OR_ROLL(k) ((inherited && inherited[k] <= 31) ? inherited[k] : rollIV(bonus))
+  ivAtk = IV_OR_ROLL(0);
+  ivDef = IV_OR_ROLL(1);
+  ivSpe = IV_OR_ROLL(2);
+  ivHp = IV_OR_ROLL(3);
+  #undef IV_OR_ROLL
   // los legendarios nacen con 3 de 4 IV perfectos, como en los juegos
   if (speciesId >= 1 && speciesId <= DEX_COUNT && DEX_TBL[speciesId].rarity == R_LEGENDARIO) {
     uint8_t *p[4] = { &ivAtk, &ivDef, &ivSpe, &ivHp };
@@ -942,7 +952,11 @@ void Pet::hatch() {
   shiny = eggShiny;
   // IV del individuo (cada crianza es unica). Se tiran ANTES de resetear el
   // vinculo a proposito: el careBonus que los empuja es el del bicho anterior.
-  rollIVs();
+  // A daycare egg hatches with the IVs it inherited (breed.cpp); the
+  // legendary/shiny floors inside rollIVs() still apply to it.
+  uint8_t inherited[4];
+  bool bred = opened && breedTakeLive(speciesId, inherited);
+  rollIVs(bred ? inherited : nullptr);
   trAtk = trDef = trSpe = 0;
   goodTicks = 0;
   berryKnown = false;
