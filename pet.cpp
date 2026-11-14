@@ -513,6 +513,17 @@ void Pet::setRegion(uint8_t r) {
   save();
 }
 
+// Goes through registerSpecies() rather than restating its bit maths, with the
+// shiny flag borrowed for the call: one rule, two callers (CLAUDE.md trap 1).
+void Pet::registerCaught(int16_t dex, bool caughtShiny) {
+  if (dex < 1 || dex > DEX_COUNT) return;
+  bool keep = shiny;
+  shiny = caughtShiny;
+  registerSpecies(dex);
+  shiny = keep;
+  save();
+}
+
 void Pet::registerSpecies(int16_t dex) {
   if (dex < 1 || dex > DEX_COUNT) return;
   bool fresh = !isRegistered(dex);

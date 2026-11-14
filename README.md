@@ -367,7 +367,56 @@ section is owned by one feature and documents its exact numbers.
 
 #### Wild encounters and weather
 
-(to be written by the wild feature)
+ADVENTURE -> **WILD**. The row shows how many encounters are left today
+(`WILD 2/3`). The first visit ever gives **10 POKE BALLs**, once.
+
+| | |
+|---|---|
+| Encounters | **3 a day**, refilled when the day changes (the pet's clock; with no clock set the day never changes) |
+| Where from | your egg region (`pet.region`); **ALL** = any region whose sprite pack is on the card |
+| Level | the **live pet's level -5..+1**, at least 2, at most 100 |
+| Never | legendaries; species with no art; a region without its pack |
+| Evolved forms | only if the wild level has reached the level its predecessor evolves at (Pidgeotto from 18). Second branches of split evolutions other than Eevee's never appear |
+| Shiny | **1 in 256**, **2 in 256** with the SHINY CHARM |
+| Options | **FIGHT** (needs a hatched pet) or **RUN**. A lost fight, RUN, or a reset mid-fight spends the encounter |
+| Win drop | ORAN BERRY **20%**, SITRUS BERRY **5%**, LUM BERRY **3%** |
+
+After a win, throw up to **3 balls**; after the third miss it flees. LET GO
+gives up. A beaten creature waits (even overnight) until you throw or let go.
+
+| Catch chance | POKE BALL (x1.0) | GREAT BALL (x1.5) | ULTRA BALL (x2.0) |
+|---|---|---|---|
+| Common base form | 45% | 67% | 90% |
+| Rare base form | 20% | 30% | 40% |
+| Evolved, common line | 30% | 45% | 60% |
+| Evolved, rare line | 13% | 19% | 26% |
+
+Capped at **90%**. A catch joins the **party**, else the **box**, at its wild
+level (frozen, like every banked creature), with random IVs (4-31; a shiny's
+floor is 20), the learnset's moves for that level and no nickname, and is
+registered in the Pokedex. With party **and** box full you are told so and the
+ball is **not** spent.
+
+**Weather** is one per day, derived from the day number: CLEAR 3/12, SUNNY
+3/12, RAIN 2/12, WIND 2/12, SNOW 1/12, FOG 1/12. **Time** comes from the same
+hour the pet's night uses: MORNING 06-10, DAY 11-16, EVENING 17-19, NIGHT
+20-05. Both are shown on the screen. Spawn weight is the rarity's base (common
+12, rare 3, evolved 4 or 1 for a rare line) times:
+
+| | favoured (x) | halved | biome x2 |
+|---|---|---|---|
+| CLEAR | NORMAL x3 | - | meadow |
+| SUNNY | FIRE, GRASS, GROUND x3 | ICE, WATER | volcano |
+| RAIN | WATER, ELECTRIC, BUG x3 | FIRE, ROCK | beach |
+| SNOW | ICE, STEEL x4 | FIRE, GRASS | snow |
+| FOG | GHOST, PSYCHIC, POISON x3 | FLYING | forest |
+| WIND | FLYING, DRAGON x3 | BUG | mountain |
+| MORNING | NORMAL, BUG, GRASS, FLYING x2 | DARK, GHOST | |
+| DAY | FIRE, FIGHTING, GROUND, ROCK x2 | | |
+| EVENING | PSYCHIC, FAIRY, NORMAL x2 | | |
+| NIGHT | GHOST, DARK, POISON x3 | GRASS, BUG | |
+
+**GHOST** types appear **only at night, or in fog**.
 
 &nbsp;
 
