@@ -45,6 +45,8 @@ const SaveField SAVE_FIELDS[] = {
   //
   // ---- battle tower and gym rematches (tower.cpp) -- keys go below this line
   //
+  { "twStrk", SK_U16 }, { "twBest", SK_U16 }, { "twSeed", SK_U32 },
+  { "rmWin", SK_BYTES },
   //
   // ---- daycare / breeding (breed.cpp) -- keys go below this line
   //
