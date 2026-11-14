@@ -59,6 +59,9 @@ uint8_t learnableFor(int16_t dex, uint8_t lvl, uint8_t *out, uint8_t max);
 #include "items.h"
 extern bool hubOpen, tasksOpen, bagOpen;
 extern uint8_t tasksPage, bagPage, hubPage;
+// the Pokedex habitat list (ui_habitat.ino), a sub-screen of the gallery
+extern bool habitatOpen; extern uint8_t habitatPage;
+void habitatOpenFromGallery();
 
 int main(){
   setup();
@@ -307,6 +310,17 @@ int main(){
   for (uint8_t i = 1; i < ITEM_COUNT; i++) bag.add(i, 3);   // enough rows for a second page
   clearAll(); bagOpen=true;                       check("bag",      &bagOpen,      &bagPage);
   bagOpen = false;
+
+  // The habitat list pages too, and backs out to the GRID past either end --
+  // never closing the Pokedex. KANTO has more missing species than one page.
+  clearAll(); galleryOpen=true; galleryPick=false; galleryDetail=0; galleryRegion=0;
+  habitatOpenFromGallery();
+  check("habitat", &habitatOpen, &habitatPage);
+  if (!galleryOpen) { printf("FAIL  habitat    paging closed the Pokedex\n"); bad++; }
+  habitatPage = 0; onSwipe(1);
+  if (habitatOpen || !galleryOpen) { printf("FAIL  habitat    paging back off the front does not return to the grid\n"); bad++; }
+  else printf("PASS  %-10s paging back off the front returns to the grid\n", "habitat");
+  clearAll(); habitatOpen = false;
 
   printf("%s\n", bad?"FAILURES":"every paged screen pages");
   return bad?1:0;

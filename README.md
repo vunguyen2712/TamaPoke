@@ -610,7 +610,48 @@ The SHINY CHARM halves the egg's shiny roll: 1/48 -> 1/24, and the best case
 
 #### Weather on the main screen and the habitat view
 
-(to be written by the weather on the main screen and the habitat view feature)
+**Weather on the main screen.** Today's weather (the same one the WILD screen
+shows) is drawn over the pet's scene, behind the header, the pet and the
+buttons, and animates continuously:
+
+| Weather | Drawn as | Night |
+|---|---|---|
+| CLEAR | nothing (the scene's own clouds) | nothing |
+| SUNNY | a halo and **12** slowly turning rays round the sun, and a 3-ring lens flare by day | nothing: a sunny night is a clear sky |
+| RAIN | up to **96** slanted streaks and **8** splashes on the ground | darker streaks |
+| SNOW | up to **64** flakes (2 or 3 px) drifting and swaying | greyer flakes |
+| FOG | **5** drifting bands of 10 lines each, below the header | dark bands |
+| WIND | up to **28** fast streaks and **6** tumbling leaves | dim streaks |
+
+No weather is drawn with **no clock set**, over the **egg**, or during a
+farewell / runaway ceremony. Particles keep off the name and status lines and
+off the bottom panel. A frame costs at most **120** drawing calls (measured
+worst: about 65, in rain).
+
+**The habitat view.** In the POKEDEX grid, the **HABITAT** pill (bottom right,
+beside the page number) lists the species of that region still **missing** from
+your Pokedex, **5 a page**, in dex order. Each row is `N.### ???` with its
+silhouette -- names stay hidden, exactly as in the grid -- and one line:
+
+| Line | Means |
+|---|---|
+| `RAIN, MORNING` | the weather and time window where it is most likely (a second one is shown when it comes within 90% of the best: `SNOW/CLEAR, EVENING`) |
+| `NIGHT/FOG ONLY` | it never appears outside those (GHOST types: night, or fog by day) |
+| `Lv.16+` | an evolved form: the lowest wild level it appears at (its predecessor's evolution level) |
+| `EGG ONLY` | never wild: the legendaries |
+| `EVOLVE ONLY` | never wild: evolution-only forms with no level to gate on (stone and second-branch evolutions) |
+| `NOT ON THIS CARD` | no art, or its region's sprite pack is missing |
+
+"Most likely" is the species' **share** of the region's wild spawns in each
+weather and window (counted with every wild form in, as at level 100), so a
+NORMAL type that keeps its weight in the rain still drops while the WATER types
+around it triple. It is a hint for your egg region; on **ALL** the pool is
+wider and the odds are thinner. Tap a row for the species' detail page, which
+also shows these lines (for every species, caught or not). A horizontal swipe
+pages, and past either end returns to the grid; a vertical swipe changes region;
+BACK returns to the grid. A region without its pack shows the page with
+**NEEDS PACK** -- locked, not hidden -- and a finished region says
+**COMPLETE!**
 
 &nbsp;
 
