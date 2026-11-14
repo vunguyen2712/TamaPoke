@@ -373,7 +373,63 @@ section is owned by one feature and documents its exact numbers.
 
 #### Daily and weekly tasks
 
-(to be written by the tasks feature)
+**ADVENTURE -> TASKS.** Three **daily** tasks and two **weekly** ones, shown as
+`n/target`. A finished task turns green and reads **CLAIM!** -- tap it and its
+reward goes into the BAG. Claim all three dailies and a fourth row, **BONUS**,
+pays once more. The hub row says how many are waiting (`TASKS 2!`), and the main
+screen flashes **TASK DONE!** for 3 s when one completes. Swipe left/right for
+the WEEKLY page; past either page returns to the hub.
+
+- The day is the **same RTC day the streak uses**; weeks start on **Monday**.
+  Dailies reset at midnight, weeklies on Monday. An unclaimed reward is lost at
+  the reset, so claim before midnight.
+- The tasks are picked from the day (and week) number, so the same day always
+  shows the same tasks -- but **only tasks you can actually do are offered**:
+  no tower or rematch task before the tower opens (any region's champion
+  beaten), no gym task once every gym's badge is yours, no catch task without a
+  ball, no hatch task unless an egg is waiting (or a farewell is open), no
+  evolve task unless the next evolution is within 12 levels (daily) or the
+  rest of the week (weekly), no breed task without two banked creatures.
+
+| Daily | Target | Reward | Offered when |
+|---|---|---|---|
+| FEED | 5 berries | 2 POKE BALL | always |
+| FAV BERRY | 2 favourite berries | 1 ORAN BERRY | always |
+| CLEAN | 2 baths | 2 POKE BALL | always |
+| PLAY | 2 ball games that scored | 1 ORAN BERRY | always |
+| TRAIN | 2 bag / reaction sessions with hits | 2 POKE BALL | always |
+| KEEP IT WELL | every stat >= 50 for **60 min in a row** | 1 GREAT BALL | always |
+| HATCH | 1 | 2 GREAT BALL | an egg is waiting |
+| EVOLVE | 1 | 1 SITRUS BERRY | evolution within 12 levels |
+| GYM WIN | 1 | 2 GREAT BALL | an unearned badge |
+| REMATCH WIN | 1 | 1 SITRUS BERRY | tower open |
+| SEE WILD | 3 | 3 POKE BALL | always |
+| BEAT WILD | 2 | 2 ORAN BERRY | always |
+| CATCH | 1 | 3 POKE BALL | a ball in the bag |
+| TOWER FLOOR | 3 | 2 GREAT BALL | tower open |
+| USE ITEM | 1 | 2 ORAN BERRY | a held item in the bag |
+
+| Weekly | Target | Reward | Offered when |
+|---|---|---|---|
+| CARE DAYS | 5 days cared for | 2 ULTRA BALL | always |
+| FEED | 30 | LEFTOVERS | always |
+| PLAY | 10 | 2 SITRUS BERRY | always |
+| TRAIN | 10 | FOCUS SASH | always |
+| BEAT WILD | 10 | QUICK CLAW | always |
+| CATCH | 5 | 2 ULTRA BALL | a ball in the bag |
+| GYM WIN | 2 | FOCUS SASH | an unearned badge |
+| TOWER FLOOR | 15 | LEFTOVERS | tower open |
+| REMATCH WIN | 3 | 2 LUM BERRY | tower open |
+| BREED | 1 | 5 GREAT BALL | two banked creatures |
+| EVOLVE | 1 | 2 SITRUS BERRY | evolution within the week |
+| NEW DEX ENTRY | 1 | 1 ULTRA BALL | that evolution is a new species |
+| USE ITEM | 5 | 2 LUM BERRY | a held item in the bag |
+
+**Daily bonus** (all three claimed), rotating by day: 2 GREAT BALL, 1 ULTRA
+BALL, 1 SITRUS BERRY, 1 LUM BERRY.
+
+KEEP IT WELL counts only while the device is running, and a lapse -- or a
+reboot -- starts the hour over. Design notes: `docs/adventure-tasks.md`.
 
 &nbsp;
 

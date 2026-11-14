@@ -42,6 +42,7 @@ const SaveField SAVE_FIELDS[] = {
   //
   // ---- daily / weekly tasks (tasks.cpp) -- keys go below this line
   //
+  { "tasks", SK_BYTES },   // rows, progress, claimed bits, day, week (20 B)
   //
   // ---- battle tower and gym rematches (tower.cpp) -- keys go below this line
   //

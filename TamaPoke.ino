@@ -715,7 +715,7 @@ void setup() {
   bag.begin();
   // feature modules load after the creature, the party and the bag they read
   wildBegin();
-  tasksBegin();
+  tasksBegin(pet);
   towerBegin();
   breedBegin();
   sdBegin();
@@ -842,6 +842,10 @@ void loop() {
     uint32_t e = rtcEpoch();
     if (e) pet.lastSeenEpoch = e;
   }
+
+  // daily/weekly tasks: roll the day over, and time the "keep it well" task
+  static uint32_t lastTasks = 0;
+  if (now - lastTasks >= 60000) { lastTasks = now; tasksTick(); }
 
   // latido de salud cada 5 min (para el soak test; se descarta si no hay monitor)
   static uint32_t lastHealth = 0;
@@ -2426,6 +2430,8 @@ void render() {
       gfx->print(b);
     }
   }
+
+  drawTasksNotice();   // "TASK DONE", for a moment after one completes
 
   if (menuOpen) drawMenu();
 

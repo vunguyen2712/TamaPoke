@@ -313,6 +313,9 @@ public:
   void startRunaway();   // tambien usable desde la consola serie (RUN)
 
   bool isEgg() const { return speciesId < 0; }
+  // The RTC day the streak counts in (0 = no clock yet). Public so the daily
+  // tasks roll over on exactly the same day boundary as the streak.
+  uint32_t today() const { return lastSeenEpoch ? lastSeenEpoch / 86400 : 0; }
   uint8_t eggCracks() const { return eggTaps; }
   bool eating() const { return millis() < eatUntil; }
   bool showHeart() const { return millis() < heartUntil; }
@@ -456,7 +459,6 @@ private:
   uint32_t medalUntil = 0;     // celebracion de medalla en pantalla
   uint32_t milestoneUntil = 0; // celebracion de hito de racha
 
-  uint32_t today() const { return lastSeenEpoch ? lastSeenEpoch / 86400 : 0; }
   void registerCare();   // primer cuidado del dia: racha + vinculo
   void addBond(uint8_t amt);
   uint8_t rollIV(int bonus) const;  // una tirada 8-31 empujada por el cuidado
