@@ -219,10 +219,11 @@ static const Trainer TRAINERS_KALOS[TRAINER_COUNT] = {
 // the game's own difficulty order. That leaves Hala, Olivia, Acerola and Kahili
 // free to be the real Sun/Moon Elite Four, with no trainer appearing twice.
 //
-// Alola has no badge art anywhere (SteGriff stops at Unova; the Kalos sheet is
-// one artist's). BADGE_REGIONS stays 6 while GYM_REGIONS becomes 7, and
-// badgeArtFor() returns nullptr for Alola so the win screen and player card draw
-// the plain type-coloured medal instead of borrowing another region's badges.
+// Alola has no canon badge art (it has no gyms; SteGriff stops at Unova and the
+// Kalos sheet is one artist's). BADGE_REGIONS stays 6 while GYM_REGIONS is 7:
+// Alola's eight are ORIGINAL sun medallions, one per slot's type, drawn by
+// tools/gen_badges_extra.py into badges_extra.h (BADGE_ALOLA_REGION), and
+// badgeArtFor() in TamaPoke.ino picks them up from there.
 static const Trainer TRAINERS_ALOLA[TRAINER_COUNT] = {
   { "ILIMA",    "MELEMELE",  T_NORMAL,   2, { {734,10},{731,11} } },
   { "LANA",     "AKALA",     T_WATER,    2, { {746,18},{752,20} } },

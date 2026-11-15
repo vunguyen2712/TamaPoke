@@ -91,7 +91,7 @@ enum StrId : uint8_t {
   S_BTL_SENDS,      // "%s sends out %s"
   S_BTL_GO,         // "Go, %s!"
   S_GYMS,           // gym list title
-  S_BADGES_FMT,     // "BADGES %u/8"
+  S_BADGES_FMT,     // "BADGES %u/%u": won / the whole ladder (gyms, E4, champion)
   S_TRAINER,        // player card title
   S_SPD_GAIN_FMT,   // "SPEED +%u" after the reaction test
   S_AVATAR_HINT,    // "tap: change avatar"

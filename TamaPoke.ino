@@ -24,6 +24,7 @@
 #include "linknow.h"
 #include "backs.h"
 #include "badges.h"
+#include "badges_extra.h"   // Alola + every Elite 4 / Champion emblem (original art)
 #include "avatars.h"
 #include <stdarg.h>
 #include "party.h"
@@ -276,26 +277,107 @@ const char *const SCREEN_NAME[SCR_COUNT] = {
   "main"
 };
 
-// Badge art for a region, or nullptr when that region has none yet.
+// Badge art for ladder slot i (0..TRAINER_COUNT-1) of a region, or nullptr.
+// THE single answer: the win screen, the player card, the gym ladder rows and
+// the region chooser strip all ask this, none of them indexes an array itself.
 //
-// NEVER `BADGES_ART[region % BADGE_REGIONS]`. The moment GYM_REGIONS outgrew
-// BADGE_REGIONS -- which happened when Kalos landed and the upstream badge set
-// stops at Unova -- 5 % 5 = 0 silently dressed Kalos in KANTO's badges, on both
-// the win screen and the player card. A wrong badge is worse than an honest
-// blank: it claims you won something you did not. The callers draw a
-// placeholder instead, and static_assert below stops the array being indexed
-// out of range whatever the two counts are.
+//   slots 0-7  the gym badges: BADGES_ART (upstream sheets, badges.h) for the
+//              first BADGE_REGIONS ladders, then Alola's original set
+//              (badges_extra.h) -- Alola has captains and kahunas, not gyms
+//   slots 8-12 the Elite 4 shapes and the champion crest, every region:
+//              EMBLEMS_ART, tinted per region and per the trainer's type
+//
+// NEVER `BADGES_ART[region % BADGE_REGIONS]`. When GYM_REGIONS first outgrew
+// BADGE_REGIONS (Kalos, before its sheet existed), 5 % 5 = 0 silently dressed
+// Kalos in KANTO's badges. A wrong badge is worse than an honest blank: it
+// claims you won something you did not. The static_asserts below pin how the
+// two generated headers line up with the ladders, so a region added to
+// trainers.h without art fails the build instead of borrowing someone's.
 static_assert(BADGE_REGIONS <= GYM_REGIONS,
               "more badge sheets than ladders -- BADGES_ART would be indexed by a region that does not exist");
+static_assert(BADGE_ALOLA_REGION == BADGE_REGIONS && BADGE_ALOLA_REGION < GYM_REGIONS,
+              "Alola's original badges must sit right after the upstream sheets");
+static_assert(BADGE_ALOLA_REGION + 1 == GYM_REGIONS,
+              "a ladder past Alola has no gym badge art: draw it in tools/gen_badges_extra.py");
+static_assert(EMBLEM_REGIONS == GYM_REGIONS,
+              "every ladder needs its Elite 4 / Champion emblems: re-run tools/gen_badges_extra.py");
+static_assert(TRAINER_GYMS + EMBLEM_SLOTS == TRAINER_COUNT,
+              "one emblem per Elite 4 member plus the champion");
 static const BadgeArt *badgeArtFor(uint8_t region, uint8_t i) {
-  if (region >= BADGE_REGIONS || i >= TRAINER_GYMS) return nullptr;
-  return &BADGES_ART[region][i];
+  if (region >= GYM_REGIONS || i >= TRAINER_COUNT) return nullptr;
+  if (i >= TRAINER_GYMS) return &EMBLEMS_ART[region][i - TRAINER_GYMS];
+  if (region < BADGE_REGIONS) return &BADGES_ART[region][i];
+  if (region == BADGE_ALOLA_REGION) return &BADGES_ALOLA_ART[i];
+  return nullptr;
+}
+
+// Draws ladder slot i's badge centred on (cx, cy). scale 1 or more multiplies
+// it up; scale 0 draws it at HALF size (16 px) for the region chooser strip,
+// each output pixel the most common colour of its 2x2 block so thin outlines
+// survive. `ghost` draws only the silhouette in `ghostCol` -- the faint outline
+// of a badge not yet earned. Returns false if there is no art to draw.
+static bool drawBadgeAt(uint8_t region, uint8_t i, int cx, int cy, uint8_t scale,
+                        bool ghost = false, uint16_t ghostCol = 0) {
+  const BadgeArt *a = badgeArtFor(region, i);
+  if (!a) return false;
+  if (scale == 0) {
+    const int H = BADGE_PX / 2;
+    for (int r = 0; r < H; r++)
+      for (int c = 0; c < H; c++) {
+        uint8_t v[4] = { a->idx[(2 * r) * BADGE_PX + 2 * c], a->idx[(2 * r) * BADGE_PX + 2 * c + 1],
+                         a->idx[(2 * r + 1) * BADGE_PX + 2 * c], a->idx[(2 * r + 1) * BADGE_PX + 2 * c + 1] };
+        uint8_t best = 0xFF, bestN = 0, opaque = 0;
+        for (int k = 0; k < 4; k++) {
+          if (v[k] == 0xFF) continue;
+          opaque++;
+          uint8_t n = 0;
+          for (int m = 0; m < 4; m++) n += (v[m] == v[k]);
+          if (n > bestN) { bestN = n; best = v[k]; }
+        }
+        if (opaque < 2) continue;
+        gfx->fillRect(cx - H / 2 + c, cy - H / 2 + r, 1, 1, ghost ? ghostCol : a->pal[best]);
+      }
+    return true;
+  }
+  int x0 = cx - BADGE_PX * scale / 2, y0 = cy - BADGE_PX * scale / 2;
+  for (int r = 0; r < BADGE_PX; r++)
+    for (int c = 0; c < BADGE_PX; c++) {
+      uint8_t v = a->idx[r * BADGE_PX + c];
+      if (v == 0xFF) continue;
+      if (ghost) {
+        // only the rim: a pixel with a transparent (or off-art) neighbour
+        bool edge = (c == 0 || a->idx[r * BADGE_PX + c - 1] == 0xFF) ||
+                    (c == BADGE_PX - 1 || a->idx[r * BADGE_PX + c + 1] == 0xFF) ||
+                    (r == 0 || a->idx[(r - 1) * BADGE_PX + c] == 0xFF) ||
+                    (r == BADGE_PX - 1 || a->idx[(r + 1) * BADGE_PX + c] == 0xFF);
+        if (!edge) continue;
+      }
+      uint16_t col = ghost ? ghostCol : a->pal[v];
+      gfx->fillRect(x0 + c * scale, y0 + r * scale, scale, scale, col);
+    }
+  return true;
+}
+
+// The golden halo of a hard-mode win: concentric rings, not a filled disc -- a
+// disc sat behind the art and read as a gold coin rather than a glow.
+static void drawHardHalo(int cx, int cy, int r) {
+  static const uint16_t RING[5] = { 0xFDE0, 0xFEA0, 0xFF60, 0xFEA0, 0xFDE0 };
+  for (int k = 0; k < 5; k++) gfx->drawCircle(cx, cy, r - k, RING[k]);
 }
 
 // Does this region have its own badge art? Split out with a primitive return
 // type so the tests can ask: the emulator's genproto.py emits every prototype
 // ABOVE the includes, where the BadgeArt struct does not exist yet.
 bool badgeArtExists(uint8_t region, uint8_t i) { return badgeArtFor(region, i) != nullptr; }
+// One pixel of that art as RGB565, or -1 where it is transparent or there is no
+// art. Same reason for the primitive types: the tests read the art through the
+// one function every screen asks, rather than through the arrays.
+int32_t badgeArtPixel(uint8_t region, uint8_t i, uint8_t x, uint8_t y) {
+  const BadgeArt *a = badgeArtFor(region, i);
+  if (!a || x >= BADGE_PX || y >= BADGE_PX) return -1;
+  uint8_t v = a->idx[y * BADGE_PX + x];
+  return v == 0xFF ? -1 : (int32_t)a->pal[v];
+}
 
 Combatant btlYou, btlFoe;
 bool btlOver = false;
@@ -4003,33 +4085,18 @@ void renderWin() {
   // rematch has no badge to show: it draws its own reward instead.
   if (btlKind == BK_REMATCH) {
     towerWinBody();
-  } else if (btlTrainer < TRAINER_GYMS) {
+  } else if (btlTrainer >= 0 && btlTrainer < TRAINER_COUNT) {
+    // Every ladder win has art now: the eight gym badges, and an emblem for
+    // each Elite 4 member and the champion. 3x, so it reads as a prize rather
+    // than a list entry.
     int by = 190;
-    if (btlHard) {
-      for (int r = 62; r >= 56; r--) gfx->drawCircle(CX, by, r, r % 2 ? 0xFEA0 : 0xFF60);
-    }
-    const BadgeArt *a = badgeArtFor(btlRegion, btlTrainer);
-    if (a) {
-      for (int r = 0; r < BADGE_PX; r++)
-        for (int c = 0; c < BADGE_PX; c++) {
-          uint8_t v = a->idx[r * BADGE_PX + c];
-          if (v == 0xFF) continue;
-          // 3x, so it reads as a prize rather than a list entry
-          gfx->fillRect(CX - BADGE_PX * 3 / 2 + c * 3, by - BADGE_PX * 3 / 2 + r * 3,
-                        3, 3, a->pal[v]);
-        }
-    } else {
-      // This region has no badge art. Say so with a plain medal in the leader's
-      // type colour rather than borrowing another region's badge.
+    if (btlHard) drawHardHalo(CX, by, 62);
+    if (!drawBadgeAt(btlRegion, (uint8_t)btlTrainer, CX, by, 3)) {
+      // unreachable while the static_asserts on badgeArtFor() hold; a plain
+      // medal in the trainer's type colour rather than someone else's badge
       const Trainer &tr = TRAINER_SETS[btlRegion % GYM_REGIONS].list[btlTrainer];
       gfx->fillCircle(CX, by, 26, typeColor(tr.type));
       gfx->drawCircle(CX, by, 26, UI_INK);
-      char n[4];
-      snprintf(n, sizeof(n), "%u", (unsigned)(btlTrainer + 1));
-      gfx->setTextSize(3);
-      gfx->setTextColor(typeColorIsLight(tr.type) ? UI_INK : UI_WHITE);
-      gfx->setCursor(CX - (int)strlen(n) * 9, by - 11);
-      gfx->print(n);
     }
     if (btlNewBadge) {
       gfx->setTextColor(UI_BAR_OK);
@@ -4039,7 +4106,7 @@ void renderWin() {
     }
   }
   if (btlKind != BK_REMATCH) {
-    snprintf(l, sizeof(l), T(S_BADGES_FMT), pet.badgeCountIn(btlRegion, btlHard));
+    snprintf(l, sizeof(l), T(S_BADGES_FMT), pet.badgeCountIn(btlRegion, btlHard), (unsigned)TRAINER_COUNT);
     gfx->setTextColor(UI_INK);
     gfx->setTextSize(2);
     gfx->setCursor(CX - (int)strlen(l) * 6, 316);
@@ -4360,6 +4427,23 @@ void battleTap(int16_t x, int16_t y) {
 // Page 1: who you are -- avatar, badges, totals. Tap the avatar to cycle it;
 // the four sprites are hand-drawn (see species.h) because SpriteCollab has no
 // trainer art and ripped sprites would be unlicensed.
+// Where ladder slot i sits on the player card. Gyms: one row of eight, 50 px
+// apart (the halo is 25, so two hard-mode halos just touch). Elite 4 + champion:
+// a row of five under it, the champion a further 10 px off to the right.
+#define PLAYER_GYM_Y 192
+#define PLAYER_E4_Y 248
+#define PLAYER_HALO_R 25
+void playerBadgeXY(int i, int *x, int *y) {
+  if (i < TRAINER_GYMS) {
+    *x = CX - (TRAINER_GYMS - 1) * 25 + i * 50;
+    *y = PLAYER_GYM_Y;
+  } else {
+    int k = i - TRAINER_GYMS;               // 0..3 Elite 4, 4 champion
+    *x = CX - 2 * 52 - 5 + k * 52 + (k == 4 ? 10 : 0);
+    *y = PLAYER_E4_Y;
+  }
+}
+
 static void renderPlayerBadges() {
   // the player's name if they have set one, the generic title if not; either
   // way tapping it opens the keyboard
@@ -4393,37 +4477,20 @@ static void renderPlayerBadges() {
     gfx->print(T(S_AVATAR_HINT));
   }
 
-  // The real badges, 2x4. Unearned ones draw as a faint outline so the shape
-  // of what is missing is still visible.
-  for (int i = 0; i < TRAINER_GYMS; i++) {
-    int bx = 140 + (i % 4) * 62, by = 188 + (i / 4) * 62;
+  // The whole ladder: the eight gym badges in one row, then the four Elite 4
+  // emblems and the champion's crest under them, set a little apart. Unearned
+  // ones draw as a faint outline of their own shape, so what is missing is
+  // still visible; a hard-mode win wears the golden halo.
+  for (int i = 0; i < TRAINER_COUNT; i++) {
+    int bx, by;
+    playerBadgeXY(i, &bx, &by);
     bool got = pet.hasBadge(playerBadgeRegion, i, false);
-    bool hard = pet.hasBadge(playerBadgeRegion, i, true);
-    if (hard) {
-      // Beaten on hard: a golden halo. Concentric rings, not a filled disc --
-      // a disc sat behind the art and read as a gold coin rather than a glow.
-      gfx->drawCircle(bx, by, 25, 0xFDE0);
-      gfx->drawCircle(bx, by, 24, 0xFEA0);
-      gfx->drawCircle(bx, by, 23, 0xFF60);
-      gfx->drawCircle(bx, by, 22, 0xFEA0);
-      gfx->drawCircle(bx, by, 21, 0xFDE0);
+    if (pet.hasBadge(playerBadgeRegion, i, true)) drawHardHalo(bx, by, PLAYER_HALO_R);
+    if (!drawBadgeAt(playerBadgeRegion, (uint8_t)i, bx, by, 1, !got, UI_TRACK)) {
+      // unreachable while badgeArtFor()'s static_asserts hold
+      if (got) gfx->fillCircle(bx, by, 14, typeColor(TRAINER_SETS[playerBadgeRegion].list[i].type));
+      gfx->drawCircle(bx, by, 14, got ? UI_INK : UI_TRACK);
     }
-    if (!got) {
-      gfx->drawCircle(bx, by, 20, UI_TRACK);
-      continue;
-    }
-    const BadgeArt *a = badgeArtFor(playerBadgeRegion, i);
-    if (!a) {                 // no art for this region: a filled disc, won is won
-      gfx->fillCircle(bx, by, 14, typeColor(TRAINER_SETS[playerBadgeRegion % GYM_REGIONS].list[i].type));
-      gfx->drawCircle(bx, by, 14, UI_INK);
-      continue;
-    }
-    for (int r = 0; r < BADGE_PX; r++)
-      for (int c = 0; c < BADGE_PX; c++) {
-        uint8_t v = a->idx[r * BADGE_PX + c];
-        if (v == 0xFF) continue;
-        gfx->fillRect(bx - BADGE_PX / 2 + c, by - BADGE_PX / 2 + r, 1, 1, a->pal[v]);
-      }
   }
   char l[32];
   gfx->setTextColor(UI_INK);
@@ -4953,6 +5020,8 @@ void lanTap(int16_t x, int16_t y) {
 }
 
 // ---------- gym list ----------
+// centre of a ladder row's badge, inside the row's right end (rows: 70..396)
+#define GYM_BADGE_X 372
 void renderGyms() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
@@ -5004,13 +5073,11 @@ void renderGyms() {
     char lv[16];
     snprintf(lv, sizeof(lv), "Lv.%u x%u", top, cnt);
     gfx->setTextColor(done ? UI_BAR_OK : (open_ ? UI_INK : UI_TRACK));
-    gfx->setCursor(384 - (int)strlen(lv) * 6, y + 28);
+    gfx->setCursor(GYM_BADGE_X - 22 - (int)strlen(lv) * 6, y + 28);
     gfx->print(lv);
-    if (done) {
-      gfx->setTextColor(UI_BAR_OK);
-      gfx->setCursor(370, y + 8);
-      gfx->print("*");
-    }
+    // The badge this row is worth, at 1x on its right end: in full once beaten
+    // (on the difficulty showing), a faint outline of its shape until then.
+    drawBadgeAt(gymRegion % GYM_REGIONS, idx, GYM_BADGE_X, y + 22, 1, !done, UI_TRACK);
   }
   uint8_t pages = (TRAINER_COUNT + GYM_ROWS - 1) / GYM_ROWS;
   for (uint8_t i = 0; i < pages; i++) {
@@ -5104,6 +5171,9 @@ static int eggRegionTap(int16_t x, int16_t y) {
 // top of its label -- invisible until a region chooser had more than one page,
 // so it appeared the moment Sinnoh made GYM_REGIONS 4 and went unnoticed
 // because swipe_test drives the paging and never looks at the pixels.
+// the gym chooser's mini badge strip: 16 px badges, 18 apart, under the name
+#define RPICK_STRIP_X(k) (RPICK_X + 26 + (k) * 18)
+#define RPICK_STRIP_DY 50
 #define RPICK_DOTS_Y 325
 #define RPICK_DOT_R 5
 // Guards, not decoration: both of these are the collision that shipped, and a
@@ -5200,7 +5270,7 @@ static void renderRegionPick(uint8_t mode) {
     if (!open)
       snprintf(sub, sizeof(sub), "%s", T(S_NEED_PACK));
     else if (mode == RPICK_FOR_GYMS)
-      snprintf(sub, sizeof(sub), T(S_BADGES_FMT), pet.badgeCountIn(i, gymHard));
+      snprintf(sub, sizeof(sub), T(S_BADGES_FMT), pet.badgeCountIn(i, gymHard), (unsigned)TRAINER_COUNT);
     else if (mode == RPICK_FOR_DEX)
       snprintf(sub, sizeof(sub), "%u/%u",
                pet.registeredCountIn(REGIONS[i].lo, REGIONS[i].hi),
@@ -5211,6 +5281,13 @@ static void renderRegionPick(uint8_t mode) {
       gfx->setCursor(RPICK_X + RPICK_W - 18 - (int)strlen(sub) * 12, y + 22);
       gfx->print(sub);
     }
+    // The ladder at a glance under the name: all thirteen at half size, in
+    // colour once won on the difficulty the chooser is counting, a grey
+    // silhouette until then.
+    if (forGyms)
+      for (uint8_t k = 0; k < TRAINER_COUNT; k++)
+        drawBadgeAt(i, k, RPICK_STRIP_X(k), y + RPICK_STRIP_DY, 0,
+                    !pet.hasBadge(i, k, gymHard), UI_TRACK);
   }
   if (forGyms) {
     gfx->fillRoundRect(LANBTN_X, LANBTN_Y, LANBTN_W, LANBTN_H, 11, UI_BG_DAY);

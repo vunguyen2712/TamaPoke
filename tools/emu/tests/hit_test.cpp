@@ -42,6 +42,7 @@ void uiConfirmRects(int *b1Top, int *b1Bot, int *b2Top, int *b2Bot);
 #include "badges.h"
 #include "trainers.h"
 bool badgeArtExists(uint8_t region, uint8_t i);
+int32_t badgeArtPixel(uint8_t region, uint8_t i, uint8_t x, uint8_t y);
 extern Pet pet;
 void onTap(int16_t x, int16_t y);
 
@@ -335,29 +336,33 @@ int main(){
   // BADGE_REGIONS 5, `5 % 5 == 0` dressed Kalos in KANTO's badges on both the
   // win screen and the player card -- silently, and no test looked. A wrong
   // badge is worse than a blank one: it claims you won something you did not.
+  //
+  // Every ladder has art now (Alola's is original, badges_extra.h), so "a
+  // region past the sheets returns none" is no longer the invariant. What still
+  // is: a region past the upstream sheets must not get one of them back by a
+  // modulo -- compared PIXEL BY PIXEL, since asking "is there art" passes
+  // whether or not it is the right art.
   {
-    for (uint8_t r = 0; r < BADGE_REGIONS; r++)
-      for (uint8_t i = 0; i < TRAINER_GYMS; i++)
-        if (!badgeArtExists(r, i)) { ck(false, "a region WITH art returned none"); goto done; }
-    ck(true, "every region with art returns it");
-    // and the ones past the art: null, NOT somebody else's badge
+    for (uint8_t r = 0; r < GYM_REGIONS; r++)
+      for (uint8_t i = 0; i < TRAINER_COUNT; i++)
+        if (!badgeArtExists(r, i)) { ck(false, "a ladder slot returned no art"); goto done; }
+    ck(true, "every region x every ladder slot (gyms, E4, champion) has art");
     {
-      bool leaked = false;
+      bool borrowed = false;
       for (uint8_t r = BADGE_REGIONS; r < GYM_REGIONS; r++)
-        for (uint8_t i = 0; i < TRAINER_GYMS; i++)
-          if (badgeArtExists(r, i)) leaked = true;
-      ck(!leaked, "a region with no art returns none rather than wrapping");
-      // With art for every ladder the loop above is EMPTY and proves nothing,
-      // so the real invariant is checked separately and is exercisable however
-      // the two counts happen to line up: an index past the end is refused
-      // rather than folded back onto region 0 by a modulo.
-      ck(!badgeArtExists(BADGE_REGIONS, 0),
-         "one past the badge art is refused, not wrapped to region 0");
-      ck(!badgeArtExists(GYM_REGIONS, 0),
-         "and so is one past every ladder");
+        for (uint8_t i = 0; i < TRAINER_GYMS; i++) {
+          bool same = true;
+          for (int y = 0; y < 32 && same; y++)
+            for (int x = 0; x < 32 && same; x++)
+              same = badgeArtPixel(r, i, x, y) == badgeArtPixel(r % BADGE_REGIONS, i, x, y);
+          if (same) borrowed = true;
+        }
+      ck(!borrowed, "a region past the upstream sheets is not wrapped onto one of them");
+      ck(BADGE_REGIONS < GYM_REGIONS, "(and there is such a region, so that check ran)");
+      ck(!badgeArtExists(GYM_REGIONS, 0), "one past every ladder is refused");
       ck(!badgeArtExists(250, 0), "and a wildly out-of-range region too");
     }
-    ck(!badgeArtExists(0, TRAINER_GYMS), "and an out-of-range gym index is refused");
+    ck(!badgeArtExists(0, TRAINER_COUNT), "and an out-of-range ladder index is refused");
   }
 done:
 
