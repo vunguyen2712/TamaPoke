@@ -142,6 +142,10 @@ int main() {
     rankSetTheme(THEME_CLASSIC);
     while (rankNoticeActive(millis())) rankNoticeActive(millis() + RANK_NOTICE_MS);
     ck(on("main"), "(on the main screen)");
+    // awake at noon, and a FRESH classic frame: hashing whatever was last on the
+    // canvas compared STARRY against a stale frame (v3.18 caught it)
+    pet.sleeping = false; pet.lastSeenEpoch = 12 * 3600;
+    render();
     uint32_t classic = skyHash();
     rankSetTheme(THEME_STARRY);
     render();
@@ -149,10 +153,12 @@ int main() {
     ck(starry != classic, "STARRY changes the sky drawn by drawScene");
     // at noon, awake: only the theme can make the ground the night colour
     pet.sleeping = false; pet.lastSeenEpoch = 12 * 3600;
+    // a patch of bare ground: below the pet, between the bond and streak
+    // entries, clear of the v3.18 gauges on the bezel
     rankSetTheme(THEME_CLASSIC); render();
-    uint16_t soilDay = gfx->buffer()[300 * 466 + 30];
+    uint16_t soilDay = gfx->buffer()[334 * 466 + 233];
     rankSetTheme(THEME_STARRY); render();
-    ck(gfx->buffer()[300 * 466 + 30] != soilDay, "STARRY dresses the whole scene as night at noon (ground too)");
+    ck(gfx->buffer()[334 * 466 + 233] != soilDay, "STARRY dresses the whole scene as night at noon (ground too)");
     rankSetTheme(THEME_CLASSIC); render();
     uint32_t noon = skyHash();
     ck(rankSetTheme(THEME_SUNSET), "(SUNSET unlocked)");

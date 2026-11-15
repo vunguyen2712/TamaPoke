@@ -280,6 +280,12 @@ natural end, leaving early and the results grade all ask those, so do not
 compute a gain anywhere else. `training_ui_test` covers it; numbers in README
 "Training games".
 
+**Home screen (v3.18)** -- the scene (`drawScene`) and the HUD (header cloud,
+need arc gauges, bond/streak line, action band, buttons) live in `ui_home.ino`;
+render() still decides what is drawn when. The button geometry (`buttons[]`,
+`BTN_*`, `HUD_BAND_Y`) stays in TamaPoke.ino and `uiButtonHit()` is the one tap
+rule. `main_ui_test` reads the gauges back as pixels and taps every button.
+
 `tests/run.sh` no longer needs SDL (only the clickable emulator does);
 `SKIP_FW=1` skips its arduino-cli step.
 

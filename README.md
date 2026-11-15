@@ -130,6 +130,32 @@ Pokedex is empty.
 |---|---|---|
 | <img src="docs/screens/main.png" width="240"> | <img src="docs/screens/egg.png" width="240"> | <img src="docs/screens/moves.png" width="240"> |
 
+**The home screen (v3.18)** is an illustrated pixel-art scene with a HUD drawn
+round the bezel:
+
+- **Top:** battery, then the clock (HH:MM, carried forward on the board's own
+  timer between the 30 s RTC reads), the name and level on a **cloud label**,
+  and the status line (`It's happy`, `It's hungry!`...) in a **speech bubble**.
+  Tapping anywhere in that band (y 28-94) still opens the menu.
+- **The four needs are arc gauges hugging the round edge**: JOY upper-left,
+  FOOD lower-left, ENE upper-right, HYG lower-right, each labelled inside its
+  arc. A gauge fills from its lower end upward in proportion to the need
+  (0-100 over the arc's whole visible length) and is **green at 50+, amber at
+  25-49, red under 25** -- the same 25 the status line complains at. A red
+  gauge's rim pulses. They replace the four flat bars.
+- **Above the band:** a heart and BOND n on the left, the daily-streak flame and
+  its count on the right (the flame used to sit at (26,16), off the round panel).
+- **The action band** (from y 338 down, lavender by day, indigo at night): the
+  same four buttons -- FOOD, SLEEP, BATH, TRAIN -- as 56 px rounded tiles in
+  their own pastel, each with its label above it, 72 px apart on the panel's
+  curve (outer pair 14 px higher). Each button's tap area is a **column 72 px
+  wide from its label to 36 px below its centre**; the four columns meet edge
+  to edge, so a tap on a label or just off a tile still counts. Asleep, the
+  other three grey out and the light button reads **WAKE**.
+
+The egg screen keeps the scene and the band, with the Pokedex count and region
+pill in it; it shows no gauges.
+
 The egg carries a **region pill** — pick whether it hatches from Kanto, Johto,
 Hoenn or all three. Switching keeps the rarity it was granted and remembers each
 region's answer, so it cannot be flipped to farm a legendary.
@@ -830,7 +856,7 @@ The SHINY CHARM halves the egg's shiny roll: 1/48 -> 1/24, and the best case
 #### Wild alerts and shiny chains
 
 **The "!" on the main screen.** A pulsing red circle with a "!" (gold when it
-is a shiny) appears left of the pet, above the bars, when the **next** wild
+is a shiny) appears left of the pet, beside the FOOD gauge, when the **next** wild
 encounter waiting today is worth a look. Tapping it opens WILD on exactly that
 creature -- the alert peeks at the same deterministic roll the WILD screen
 makes, and spends nothing. The hub's WILD row shows `!` at the same time.
@@ -1336,9 +1362,27 @@ German, Italian, Portuguese — switchable from the settings screen (swipe down)
 
 ## Backgrounds: biome + real time
 
-The idle screen paints the sky from the **RTC's real time** (dawn / day / dusk /
-night with moon and stars) and the ground from the **type's biome** (meadow,
-beach, forest, volcano, mountain, snow). Sleeping forces night.
+The idle screen paints the sky from the **RTC's real time** and the land from
+the **type's biome**, all procedurally (no bitmaps) and animated:
+
+| Time | Hours | Sky |
+|---|---|---|
+| dawn | 06-07 | rose to apricot; a warm sun with 12 slowly turning rays |
+| day | 08-17 | blue to pale; the rayed sun, two layers of drifting clouds, a pair of gulls crossing about every 36 s |
+| dusk | 18-19 | violet to amber; a low striped sun left of the pet |
+| night | 20-05, or asleep | deep blue; a crescent moon with a halo, 30 twinkling stars, dim clouds |
+
+| Biome | Far layer | Ground |
+|---|---|---|
+| meadow | two ranges of rolling hills with round trees | flowers in four colours, swaying grass tufts; fireflies at night |
+| beach | the sea with shimmering glints, a palm island, a sailboat drifting along the horizon | wet sand with a breathing foam line, shells, a starfish |
+| forest | a row of far pines and a framing near row | a clearing, red mushrooms, ferns; fireflies at night |
+| volcano | a cone with a pulsing crater, a lava trickle and rising smoke | glowing cracks, rocks, drifting embers |
+| mountain | three snow-capped peaks, a nearer range, a pine line | stones and a trodden path |
+| snow | snowy hills with snow-laden pines | drifts, a snowman, sparkles; snow always falling |
+
+Every scenery colour is tinted for the time of day (rose at dawn, amber at
+dusk, deep blue at night). Sleeping forces night.
 
 ## Layout
 

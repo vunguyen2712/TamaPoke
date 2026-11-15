@@ -653,14 +653,12 @@ uint16_t wildMainOverlaps(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
   if (wildRectsMeet(x0, y0, x1, y1, 103, 96, 103 + 260, 96 + 44)) o |= WOV_TASK;  // drawTasksNotice()
   if (wildRectsMeet(x0, y0, x1, y1, EVO_BTN_X, EVO_BTN_Y, EVO_BTN_X + EVO_BTN_W, EVO_BTN_Y + EVO_BTN_H)) o |= WOV_EVO;
   if (wildRectsMeet(x0, y0, x1, y1, FAR_BTN_X, FAR_BTN_Y, FAR_BTN_X + FAR_BTN_W, FAR_BTN_Y + FAR_BTN_H)) o |= WOV_FAR;
-  for (int i = 0; i < BTN_COUNT; i++) {
-    int cx = buttons[i].cx, cy = buttons[i].cy;
-    int nx = cx < x0 ? x0 : (cx > x1 ? x1 : cx);
-    int ny = cy < y0 ? y0 : (cy > y1 ? y1 : cy);
-    int dx = nx - cx, dy = ny - cy;
-    if (dx * dx + dy * dy <= BTN_HIT * BTN_HIT) o |= WOV_BTN;
+  for (int i = 0; i < BTN_COUNT; i++) {                        // uiButtonHitRect(), the tap path's own
+    int bx0, by0, bx1, by1;
+    uiButtonHitRect(i, &bx0, &by0, &bx1, &by1);
+    if (wildRectsMeet(x0, y0, x1, y1, bx0, by0, bx1, by1)) o |= WOV_BTN;
   }
-  if (y1 >= 312) o |= WOV_PANEL;                              // bars + buttons panel
+  if (y1 >= HUD_BAND_Y) o |= WOV_PANEL;                       // the HUD's action band (ui_home.ino)
   if (wildRectsMeet(x0, y0, x1, y1, 73, 150, 73 + 320, 150 + 96)) o |= WOV_CELEB;      // drawCelebration()
   if (wildRectsMeet(x0, y0, x1, y1, 53, 176, 53 + 360, 176 + 74)) o |= WOV_PARTYBN;    // party banner
   if (wildRectsMeet(x0, y0, x1, y1, 101, 288, 101 + 264, 288 + 64)) o |= WOV_FEED;     // food picker

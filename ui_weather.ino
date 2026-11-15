@@ -12,7 +12,7 @@
 // frame, nothing is stored between frames.
 
 #define WX_PRIM_BUDGET 120   // primitives a frame, at most (weather_ui_test)
-#define WX_BOTTOM 312        // the bottom panel is painted over from here down
+#define WX_BOTTOM HUD_BAND_Y // the HUD's action band is painted over from here down
 #define WX_R2 (232L * 232L)  // the round panel: nothing outside radius ~233 shows
 
 static uint16_t gWxPrims = 0;       // primitives drawn by the last overlay
@@ -142,8 +142,8 @@ static void wxWind(uint32_t now, bool night) {
 // drew, plus a lens-flare trail. By day only: a sunny NIGHT is a clear sky.
 static void wxSun(uint32_t now) {
   int h = sceneHour();
-  // the scene's own sun: high until 18:00, then setting on the horizon
-  int sx = h < 18 ? 360 : 233, sy = h < 18 ? 84 : HORIZON - 6, sr = h < 18 ? 26 : 34;
+  // the scene's own sun (ui_home.ino): high until 18:00, then low on the left
+  int sx = h < 18 ? 360 : DUSK_SUN_X, sy = h < 18 ? 84 : DUSK_SUN_Y, sr = h < 18 ? 26 : DUSK_SUN_R;
   uint16_t ray = C565(0xff, 0xe8, 0x9a), halo = C565(0xff, 0xf4, 0xc8);
   gfx->drawCircle(sx, sy, sr + 4, halo); wxPrim();
   gfx->drawCircle(sx, sy, sr + 5, halo); wxPrim();
