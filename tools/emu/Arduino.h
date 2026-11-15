@@ -22,6 +22,7 @@
 inline void *ps_malloc(size_t n) { return malloc(n); }
 
 uint32_t millis();          // clock.cpp
+inline uint32_t micros() { return millis() * 1000u; }   // PERF/FLUSHT only; ms resolution here
 void emuSetTimeScale(uint32_t s);
 uint32_t emuTimeScale();
 inline void delay(uint32_t ms) {
@@ -102,6 +103,10 @@ struct FakeSerial {
   void println(const char *s = "") { std::printf("%s\n", s); fflush(stdout); }
   void println(int v) { std::printf("%d\n", v); fflush(stdout); }
   void print(const char *s) { std::printf("%s", s); fflush(stdout); }
+  // SHOT streams the framebuffer as raw bytes
+  int availableForWrite() { return 4096; }
+  size_t write(const uint8_t *b, size_t n) { fwrite(b, 1, n, stdout); return n; }
+  void flush() { fflush(stdout); }
 };
 extern FakeSerial Serial;
 

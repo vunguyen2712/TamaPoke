@@ -47,14 +47,28 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "3.18"
+#define FW_VERSION "3.19"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
 Arduino_CO5300 *panel = new Arduino_CO5300(
   bus, LCD_RESET, 0 /*rotation*/, LCD_WIDTH, LCD_HEIGHT, 6, 0, 0, 0);
 // Framebuffer completo en PSRAM: dibujamos todo y hacemos flush() (sin parpadeo)
+#ifdef ARDUINO_ARCH_ESP32
+// Samples the touch chip just before every panel push: see touchSampleMidFrame().
+void touchSampleMidFrame();
+class TouchCanvas : public Arduino_Canvas {
+public:
+  using Arduino_Canvas::Arduino_Canvas;
+  void flush(bool force_flush = false) override {
+    touchSampleMidFrame();
+    Arduino_Canvas::flush(force_flush);
+  }
+};
+Arduino_Canvas *gfx = new TouchCanvas(LCD_WIDTH, LCD_HEIGHT, panel);
+#else
 Arduino_Canvas *gfx = new Arduino_Canvas(LCD_WIDTH, LCD_HEIGHT, panel);
+#endif
 
 TouchDrvCST92xx touch;
 Pet pet;
@@ -818,6 +832,27 @@ static bool starterRegionDone = false;
 volatile bool gTouchIrq = false;
 void IRAM_ATTR touchIsr() { gTouchIrq = true; }
 uint32_t lastRender = 0;
+
+// Hardware test hooks: the console can play a gesture into handleTouch() as
+// if a finger made it (one sample per 20 ms poll), time every render() per
+// screen, and dump the framebuffer. They exist because timing and the real
+// panel are what the emulator cannot see.
+static int16_t fkX[96], fkY[96];
+static bool fkP[96];
+static uint8_t fkN = 0, fkI = 0;
+static void fakeGesture(int x0, int y0, int x1, int y1, int samples) {
+  if (samples < 2) samples = 2;
+  if (samples > 94) samples = 94;
+  for (int i = 0; i < samples; i++) {
+    fkX[i] = x0 + (x1 - x0) * i / (samples - 1);
+    fkY[i] = y0 + (y1 - y0) * i / (samples - 1);
+    fkP[i] = true;
+  }
+  fkX[samples] = x1; fkY[samples] = y1; fkP[samples] = false;
+  fkI = 0; fkN = samples + 1;
+}
+static uint32_t perfN[SCR_COUNT], perfSum[SCR_COUNT], perfMax[SCR_COUNT], perfGapMax = 0;
+
 // proteccion del AMOLED: atenuado por inactividad
 uint32_t lastInteract = 0;
 uint8_t dimStage = 0;        // 0 despierto, 1 atenuado (90s), 2 casi apagado (5min)
@@ -1031,8 +1066,16 @@ void loop() {
   if (now - lastRender >= (uint32_t)((gameOpen || sackOpen || spdOpen || arcadeOpen ||
                                      (battleOpen && btlFxActive())) ? 85 : 100)) {
     lastRender = now;
+    uint8_t sc = uiCurrentScreen() % SCR_COUNT;
+    uint32_t t0 = micros();
     render();
+    uint32_t us = micros() - t0;
+    perfN[sc]++; perfSum[sc] += us; if (us > perfMax[sc]) perfMax[sc] = us;
   }
+  static uint32_t lastLoopUs = 0;
+  uint32_t nowUs = micros();
+  if (lastLoopUs && nowUs - lastLoopUs > perfGapMax) perfGapMax = nowUs - lastLoopUs;
+  lastLoopUs = nowUs;
 }
 
 // brillo segun sueno + inactividad (proteccion del AMOLED)
@@ -1288,6 +1331,44 @@ void handleSerial() {
       if (pet.isRegistered(i)) Serial.printf(" %d", i);
     Serial.println();
     Serial.println("DONE");
+  } else if (line.startsWith("TAP ")) {        // TAP x y [ms]
+    int x = 0, y = 0, ms = 80;
+    sscanf(line.c_str() + 4, "%d %d %d", &x, &y, &ms);
+    fakeGesture(x, y, x, y, ms / 20);
+    Serial.println("DONE");
+  } else if (line.startsWith("DRAG ")) {       // DRAG x0 y0 x1 y1 [ms]
+    int a = 0, b = 0, c = 0, d = 0, ms = 300;
+    sscanf(line.c_str() + 5, "%d %d %d %d %d", &a, &b, &c, &d, &ms);
+    fakeGesture(a, b, c, d, ms / 20);
+    Serial.println("DONE");
+  } else if (line == "PERF") {                 // render time per screen since the last PERF
+    for (int i = 0; i < SCR_COUNT; i++) if (perfN[i])
+      Serial.printf("perf %s n=%u avg=%lums max=%lums\n", SCREEN_NAME[i], perfN[i],
+                    (unsigned long)(perfSum[i] / perfN[i] / 1000), (unsigned long)(perfMax[i] / 1000));
+    Serial.printf("perf loopgap_max=%lums screen=%s\n", (unsigned long)(perfGapMax / 1000),
+                  SCREEN_NAME[uiCurrentScreen() % SCR_COUNT]);
+    memset(perfN, 0, sizeof(perfN)); memset(perfSum, 0, sizeof(perfSum));
+    memset(perfMax, 0, sizeof(perfMax)); perfGapMax = 0;
+    Serial.println("DONE");
+  } else if (line == "FLUSHT") {               // how much of a frame is just the panel push
+    uint32_t t0 = micros();
+    for (int i = 0; i < 10; i++) gfx->flush();
+    Serial.printf("flush avg=%lums\n", (unsigned long)((micros() - t0) / 10000));
+    Serial.println("DONE");
+  } else if (line == "SHOT") {                 // raw RGB565 framebuffer, little-endian
+    const uint8_t *fb = (const uint8_t *)gfx->getFramebuffer();
+    const size_t n = (size_t)LCD_WIDTH * LCD_HEIGHT * 2;
+    Serial.printf("SHOT %d %d %u\n", LCD_WIDTH, LCD_HEIGHT, (unsigned)n);
+    // USB CDC drops what does not fit its TX buffer, so feed it only what it has room for
+    for (size_t o = 0; o < n; ) {
+      int room = Serial.availableForWrite();
+      if (room <= 0) { delay(1); continue; }
+      size_t k = (n - o) < (size_t)room ? (n - o) : (size_t)room;
+      o += Serial.write(fb + o, k);
+    }
+    Serial.flush();
+    Serial.println();
+    Serial.println("DONE");
   } else if (line == "HEALTH") {
     Serial.printf("up=%lus heap=%u min=%u sd=%d mon=%d\n",
                   (unsigned long)(millis() / 1000), ESP.getFreeHeap(),
@@ -1324,17 +1405,60 @@ bool inPetZone(int16_t x, int16_t y) {
 }
 
 // el toque se resuelve al LEVANTAR el dedo para distinguir tap de deslizar
+// A frame takes 75-95 ms on the board (45 of it the panel push alone), and the
+// loop only polled the touch chip between frames -- so a quick tap that went
+// down and up inside one frame was never seen at all. The canvas now samples
+// the chip once more just before each push (touchSampleMidFrame, from
+// TouchCanvas::flush) and parks what it read here; handleTouch() replays those
+// samples, in order, through the same gesture logic before its own read.
+static int16_t rtX[16], rtY[16];
+static bool rtP[16];
+static uint8_t rtHead = 0, rtTail = 0;
+static bool rtDown = false;          // what the chip said last, whoever asked
+static uint32_t rtLast = 0;          // the last time anyone read it
+
+void touchSampleMidFrame() {
+  if (fkN || millis() - rtLast < 20) return;
+  if (!gTouchIrq && !rtDown) return;
+  uint8_t next = (rtHead + 1) & 15;
+  if (next == rtTail) return;        // full: leave it to the loop's own read
+  rtLast = millis();
+  gTouchIrq = false;
+  int16_t x = 0, y = 0;
+  bool p = touch.getPoint(&x, &y, 1) > 0;
+  rtDown = p;
+  rtX[rtHead] = x; rtY[rtHead] = y; rtP[rtHead] = p;
+  rtHead = next;
+}
+
+static void touchStep(bool pressed, int16_t x, int16_t y);
+
 void handleTouch() {
-  static uint32_t lastPoll = 0;
-  if (millis() - lastPoll < 20) return;  // 50 Hz le sobra a un dedo
-  lastPoll = millis();
+  while (rtTail != rtHead) {         // what the canvas caught mid-frame, first
+    uint8_t i = rtTail;
+    rtTail = (rtTail + 1) & 15;
+    touchStep(rtP[i], rtX[i], rtY[i]);
+  }
+  if (millis() - rtLast < 20) return;  // 50 Hz le sobra a un dedo
+  rtLast = millis();
   // solo tocamos el bus si el chip aviso por INT o si el dedo sigue abajo (hay
   // que detectar el levantamiento). Leer el CST9217 dormido se colgaba ~1s y
   // congelaba el loop entero; SensorLib no respeta el timeout de Wire.
-  if (!gTouchIrq && !wasPressed) return;
-  gTouchIrq = false;
-  int16_t x, y;
-  bool pressed = touch.getPoint(&x, &y, 1) > 0;
+  int16_t x = 0, y = 0;
+  bool pressed;
+  if (fkI < fkN) {                 // a scripted gesture from the console (TAP/DRAG)
+    x = fkX[fkI]; y = fkY[fkI]; pressed = fkP[fkI];
+    if (++fkI >= fkN) fkN = fkI = 0;
+  } else {
+    if (!gTouchIrq && !wasPressed) return;
+    gTouchIrq = false;
+    pressed = touch.getPoint(&x, &y, 1) > 0;
+    rtDown = pressed;
+  }
+  touchStep(pressed, x, y);
+}
+
+static void touchStep(bool pressed, int16_t x, int16_t y) {
   arcadeTouchPeek(pressed, x, y);   // only reads: steers BERRY CATCH while a finger is down
 
   // saco de entrenamiento: cada toque cuenta al instante (aporrear rapido)

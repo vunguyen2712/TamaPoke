@@ -357,6 +357,14 @@ On hardware, verify over the serial console (115200):
   way to reach them — `SHINY` just flips the flag on an already-hatched pet
 - `BYE` / `RUN` / `ABANDON` — the three endings · `BEEP` audio · `LS` / `PUT` SD files
 - `TIME <epoch>` / `RTCSET <epoch>` — offline-progression and clock paths
+- `TAP x y [ms]` / `DRAG x0 y0 x1 y1 [ms]` play a gesture through the real
+  touch path; `PERF` prints render time per screen since the last PERF;
+  `FLUSHT` times the bare panel push; `SHOT` streams the raw RGB565 framebuffer.
+  `tools/hw_drive.py` wraps them (`shot:<name>` saves a PNG, `wait:<s>`).
+  Measured on v3.18: panel push 45 ms; main 77 ms a frame, hub 74, menu 97,
+  arcade 70-85, battle 90-93. Touch is sampled again inside every
+  `gfx->flush()` (`TouchCanvas`), because between-frame polling alone missed
+  taps shorter than a frame.
 
 To exercise long-horizon logic in minutes, temporarily lower `PET_TICK_MS`,
 `MINUTES_PER_LEVEL` and `FAREWELL_AGE_MIN` in `pet.h`.
