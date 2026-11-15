@@ -3,7 +3,7 @@
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://vunguyen2712.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v3.17-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v3.18-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
 [![Stars](https://img.shields.io/github/stars/vunguyen2712/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/vunguyen2712/TamaPoke/stargazers)
@@ -18,7 +18,7 @@ included).
 >
 > Forked from [**DylanPDao/TamaPoke**](https://github.com/DylanPDao/TamaPoke),
 > which is itself a fork of Quique Tortosa's original (below). Everything from
-> v3.12 to v3.17 is new here; see **[What's new in this fork](#whats-new-in-this-fork)**.
+> v3.12 to v3.18 is new here; see **[What's new in this fork](#whats-new-in-this-fork)**.
 > Install it from your browser with the **[web installer](https://vunguyen2712.github.io/TamaPoke/web/)**.
 
 > ### 🙏 This is a fork of [**socquique/TamaPoke**](https://github.com/socquique/TamaPoke) by **Quique Tortosa**
@@ -39,8 +39,32 @@ included).
 
 ## What's new in this fork
 
-Six releases on top of DylanPDao's v3.11. The full rules and numbers for each
+Seven releases on top of DylanPDao's v3.11. The full rules and numbers for each
 are in the **Game manual** below.
+
+### v3.18: New look and the Arcade
+- **Home screen:**
+  - An illustrated, animated scene for each of the six biomes, with drifting
+    clouds, a sun with turning rays, a moon and stars at night, gulls, a
+    sailboat, fireflies and snow.
+  - Your pet's name sits on a cloud label, with a speech bubble for how it is
+    feeling.
+  - The four needs are curved gauges along the edge of the screen that turn
+    amber and then red as they drop.
+  - A pastel button bar at the bottom, with a label over each button.
+- **Battle screen:**
+  - A title banner (for example GYM 3 1/3 or TOWER F5).
+  - Framed HP cards with type and status tags.
+  - Creatures stand on white platforms over a floor with depth.
+  - Colour-coded FIGHT, POKEMON and RUN buttons, with moves coloured by type.
+  - A new win screen with a sunburst behind the badge.
+- **Arcade** (Adventure, page 2): four new mini games.
+  - **Berry Catch:** catch berries in a basket, dodge rocks.
+  - **Memory:** match pairs of type symbols.
+  - **Echo:** repeat a growing sequence on four type pads.
+  - **Pop-up:** tap critters as they pop up, avoid the bombs.
+  - Each has a best score and gives joy and bond, plus one item prize a day
+    for an S grade.
 
 ### v3.17: Water Gun, badge art, training games
 - **Water Gun and Hydro Pump** pour one solid, rippling jet of water, with foam
