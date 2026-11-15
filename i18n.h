@@ -150,3 +150,21 @@ void setLang(Lang l);        // cambia y persiste el idioma
 inline const char *TL(const char *const six[LANG_COUNT]) {
   return six[gLang < LANG_COUNT ? gLang : LANG_EN];
 }
+
+// ---- training games (ui_train.ino) ----
+// Six-language rows read with TL(), ES EN FR DE IT PT, ASCII only. Kept in one
+// block so the training games' strings merge as one hunk.
+static const char *const S_TRN_GO[LANG_COUNT]    = { "YA!", "GO!", "GO!", "LOS!", "VIA!", "JA!" };
+static const char *const S_TRN_CRIT[LANG_COUNT]  = { "CRITICO!", "CRITICAL!", "CRITIQUE!", "KRITISCH!", "CRITICO!", "CRITICO!" };
+static const char *const S_TRN_WEAK[LANG_COUNT]  = { "PUNTO DEBIL!", "WEAK SPOT!", "POINT FAIBLE!", "SCHWACHSTELLE!", "PUNTO DEBOLE!", "PONTO FRACO!" };
+static const char *const S_TRN_FEVER[LANG_COUNT] = { "FIEBRE!", "FEVER!", "FIEVRE!", "FIEBER!", "FEBBRE!", "FEBRE!" };
+static const char *const S_TRN_COMBO[LANG_COUNT] = { "COMBO %u", "COMBO %u", "COMBO %u", "COMBO %u", "COMBO %u", "COMBO %u" };
+static const char *const S_TRN_MISS[LANG_COUNT]  = { "FALLO", "MISS", "RATE", "DANEBEN", "MANCATO", "ERROU" };
+static const char *const S_TRN_2BALL[LANG_COUNT] = { "2 BOLAS!", "2 BALLS!", "2 BALLES!", "2 BAELLE!", "2 PALLE!", "2 BOLAS!" };
+static const char *const S_TRN_WIND[LANG_COUNT]  = { "VIENTO", "WIND", "VENT", "WIND", "VENTO", "VENTO" };
+static const char *const S_TRN_HBAG[LANG_COUNT]  = { "GOLPEA EN LA ZONA", "HIT IN THE ZONE", "FRAPPE DANS LA ZONE", "TRIFF DIE ZONE", "COLPISCI LA ZONA", "BATA NA ZONA" };
+static const char *const S_TRN_HSPD[LANG_COUNT]  = { "EVITA LAS BOMBAS", "AVOID THE BOMBS", "EVITE LES BOMBES", "KEINE BOMBEN", "EVITA LE BOMBE", "EVITE AS BOMBAS" };
+static const char *const S_TRN_HBALL[LANG_COUNT] = { "QUE NO CAIGA", "KEEP IT UP", "GARDE-LA EN L'AIR", "NICHT FALLEN LASSEN", "NON FARLA CADERE", "NAO DEIXE CAIR" };
+static const char *const S_TRN_PTS[LANG_COUNT]   = { "%u PTS", "%u PTS", "%u PTS", "%u PKT", "%u PTI", "%u PTS" };
+static const char *const S_TRN_DEF[LANG_COUNT]   = { "DEF +%u", "DEF +%u", "DEF +%u", "VERT +%u", "DIF +%u", "DEF +%u" };
+static const char *const S_TRN_MAXED[LANG_COUNT] = { "AL MAXIMO", "MAXED OUT", "AU MAXIMUM", "AM LIMIT", "AL MASSIMO", "NO MAXIMO" };

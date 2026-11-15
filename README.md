@@ -150,12 +150,13 @@ While **awake**, per minute:
 - 🍎 **Berry** (3 flavors): +25 FOOD. Each species has a **hidden favorite flavor**
   → +35 FOOD, +10 JOY, ♥, bond, and it gets revealed.
 - 🍬 **Candy:** +10 FOOD, +12 JOY, but **+12 weight** (fattening).
-- ⚽ **Play / minigame:** **+5 JOY, plus 2 per rally** (max +35), −ENE, burns
-  weight. Pure happiness — it trains nothing, so playing is never a stat grind.
-  Leaving early keeps what you earned.
-- 🎯 **Reaction test:** a target appears, tap it before it shrinks away. Trains
-  **SPEED**; the window tightens as you go.
-- 🥊 **Training bag:** trains **STRENGTH** (~4 hits = 1 pt, cap +18/session), tires it.
+- ⚽ **Ball game:** trains **DEFENSE** and gives **+5 JOY, plus 2 per rally** (max
+  +35), −ENE, burns weight. Leaving early keeps what you earned.
+- 🎯 **Reaction test:** trains **SPEED**.
+- 🥊 **Training bag:** trains **STRENGTH**, tires it.
+- All three are skill games with combos, a countdown and a graded results card;
+  every number is in [Training games](#training-games) below. Each caps at
+  **+18 per session**.
 - 🫧 **Bath:** clears poops, HYG → 100.
 - 👆 **Pet it:** +5 JOY + bond.
 - **Personality bonuses** on top of the above (see [Personalities](#personalities)):
@@ -173,6 +174,86 @@ While **awake**, per minute:
   evening is deliberately outside the window -- a six-hour night is the only part
   of the day you are not expected to be around. The light
   button beats both: a creature you sent to bed stays there.
+
+### Training games
+
+Open them from the **dumbbell** icon (the training menu): **STRENGTH** → the bag,
+**SPEED** → the reaction test, **DEFENSE** → the ball game. All three share:
+
+- A **3-2-1 countdown** (1.8 s) before the clock starts. Nothing scores during it.
+- A **COMBO** with a multiplier **x1 below 5, x2 from 5, x3 from 10** in a row.
+  Each link plays a blip one step higher (a C-major scale over two octaves).
+- Pop-up points, particle bursts, a screen jolt on the big hits, and the creature
+  taking part (punching, dashing, chasing) when its sprite is on the SD card.
+- A **results card**: grade, stars, the stat gained, points and hits, the record,
+  the best combo. Grade is from the gain the session's points are worth
+  *before* the IV ceiling: **S = 18** (3 stars), **A ≥ 12** (2), **B ≥ 6** (1),
+  **C** below. A creature already at its ceiling reads **MAXED OUT**.
+- **Points vs records.** Each game keeps its raw count — punches, targets hit,
+  rallies — and the **record is still that raw count**, so records set before
+  this version mean the same thing. Only the stat gain reads the points.
+- **Leaving early banks what you earned**, by the same formula as finishing.
+  The bag leaves by tapping the top strip (y < 72); the reaction test and the
+  ball game by any swipe; the ball game also by tapping the empty top strip (a
+  ball up there is hit, not a quit). Leaving during the countdown is leaving
+  with nothing.
+
+| | Bag (STRENGTH) | Reaction test (SPEED) | Ball game (DEFENSE) |
+|---|---|---|---|
+| Length | 10 s | 15 s | 20 s, or 3 balls on the floor |
+| Gain | min(18, pts / 4) | min(18, ⌊⌊pts × 2/3⌋ / 2⌋) ≈ pts / 3 | min(18, ⌊⌊pts × 2/3⌋ / 2⌋) ≈ pts / 3 |
+| Max gain at | 72 pts | 54 pts | 54 pts |
+| Record counts | punches | targets hit | rallies |
+
+The gain is then clipped to the IV ceiling as always (`trMaxFor(iv)`).
+
+**🥊 The bag.** Every tap is a punch worth **1 point**, so pure mashing trains
+exactly as before (61 punches = +15). The skill is **timing**: a needle sweeps a
+power meter under the bag (one way in **650 ms**, then back). A punch thrown
+while it is in the **gold zone** is a **CRITICAL**, worth **2 + the combo
+multiplier** (3, 4 at x2, 5 at x3), with an impact flash and the bag swinging
+hard. The zone starts at **±10 %** of the meter around its centre and narrows
+by **0.8 %** per link of the chain, down to **±5.6 %**.
+- A punch within **220 ms** of the previous one is a **JAB**: 1 point, it cannot
+  crit and does not break the chain. So mashing earns no crits; wind up first.
+- A wound-up punch outside the zone is 1 point and **breaks** the chain.
+- **6 crits in a row** light **FEVER** for **2.5 s**: every punch is worth
+  **2**, timed or not. The chain resets when it starts.
+- A **WEAK SPOT** glows on the bag for **1.1 s**, first at 2 s, then every
+  **2.3–3.6 s**. A punch within 36 px of it adds **+3** on top of whatever the
+  punch was worth.
+
+**🎯 The reaction test.** Tap the target before it shrinks away. Its window is
+**1100 ms − 32 ms per target hit**, never below **380 ms**. A red target is
+worth **1 + (multiplier − 1)**. The session changes as it goes:
+- **GOLD** targets (**12 %**): smaller, **70 %** of the window, worth
+  **3 + (multiplier − 1)**.
+- From **3 s**: a **BOMB** can appear beside a real target (**25 %** of
+  refills). Tapping it costs **3 points** (never below 0) and the chain; left
+  alone it fizzles after **1 s**, harmlessly. Never two bombs at once, never a
+  bomb alone.
+- From **5 s**: a **second real target** can appear at once (**30 %**).
+- From **8 s**: half the targets **drift**, 80–140 px/s, bouncing off the edge.
+- A real target that **expires**, or a tap on empty panel, is a **miss** (a red
+  X): it breaks the chain but costs no points.
+
+**⚽ The ball game.** Keep the pokeball up. Each hit is worth
+**1 + (multiplier − 1)**; the chain is hits in a row with **no ball touching
+the floor**.
+- A **GOLDEN** ball (**20 %** of respawns, from the 3rd hit) is worth **+2**
+  more per hit until it lands.
+- A **berry or a star** floats across now and then (first at 4 s; it takes
+  ~5 s to cross, and the next comes 2.5–4 s after one leaves, 3.5–5 s after one
+  is caught): tap it for **+3**. It is not a hit and does not touch the chain.
+- At **12 hits** a **second ball** drops in. Either ball on the floor costs a
+  life.
+- From **12 s**, **wind**: a 1.4 s gust every 3.2–4.4 s pushes the balls
+  sideways.
+
+What an average session is worth stays about where it was: a masher on the bag
+gets exactly the old hits/4; ~22 targets with short chains and a few golds is
+~+12 SPEED (it was +11); ~15 rallies is ~+7 DEFENSE (it was +7). Skill is what
+reaches the 18 ceiling sooner.
 
 ### Eggs & who you get (spawn odds)
 - **First ever pet:** you pick a starter — **Bulbasaur / Charmander / Squirtle**.
@@ -969,7 +1050,7 @@ If one bottoms out it counts as a *slip-up*.
 **Buttons (bottom arc, icons):**
 - 🍎 **Feed** → food menu: 3 berries (each species has a hidden favourite that
   gives a bonus) and a candy (+happiness but it fattens; weight makes it sluggish).
-- ⚽ **Play** → the pokeball minigame (joy only).
+- ⚽ **Play** → the pokeball minigame (joy and DEFENSE; see Training games).
 - 🌙 **Light** → sleep/wake (recovers energy, dims the screen). While asleep,
   needs decay much slower (rest).
 - 🫧 **Bath** → a foam scene that cleans up the poops.
@@ -1078,9 +1159,11 @@ Typing is shown on the Battle page of the stat card. *(Battles: on the roadmap.)
 
 Each creature has ATK/DEF/SPD/VIT = **base stat** + level + **IV** (0–31, rolled
 at hatch, `IV × level/100` exactly as in the real games) + **training**:
-- SPEED ← the **reaction test** (~2 reactions = 1 pt, cap +18 per session)
-- DEFENSE ← accumulated wellbeing (1 h resting or well-cared = +1)
-- STRENGTH ← the training bag (~4 hits = 1 pt, cap +18 per session)
+- SPEED ← the **reaction test** (~3 points = 1 pt, cap +18 per session)
+- DEFENSE ← the **ball game** (~3 points = 1 pt, cap +18), and accumulated
+  wellbeing (1 h resting or well-cared = +1)
+- STRENGTH ← the training bag (4 points = 1 pt, cap +18 per session)
+- See [Training games](#training-games) for how points are scored.
 - VIT (vitality, from the base HP stat) — not trainable
 
 ### Moves
