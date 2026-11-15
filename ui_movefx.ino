@@ -121,7 +121,7 @@ static const FxMap *const FX_PART[18] = {
 enum : uint8_t {
   FXS_NONE = 0, FXS_CONTACT, FXS_PROJ, FXS_STREAM, FXS_BEAM, FXS_BOLTS, FXS_FALL,
   FXS_QUAKE, FXS_SLASH, FXS_BITE, FXS_WAVE, FXS_MULTI, FXS_BUFF, FXS_DEBUFF,
-  FXS_HEAL, FXS_CHARGE, FXS_SELFHIT, FXS_COUNT
+  FXS_HEAL, FXS_CHARGE, FXS_SELFHIT, FXS_JET, FXS_COUNT
 };
 
 // THE answer to "what does this move look like". Signature moves first, then
@@ -133,7 +133,9 @@ uint8_t moveFxShape(uint8_t mv) {
     case MV_HYPER_BEAM: case MV_SOLAR_BEAM: case MV_ICE_BEAM: case MV_AURORA_BEAM:
     case MV_PSYBEAM: case MV_FLASH_CANNON: case MV_DRAGON_RAGE:
       return FXS_BEAM;
-    case MV_FLAMETHROWER: case MV_FIRE_BLAST: case MV_WATER_GUN: case MV_HYDRO_PUMP:
+    case MV_WATER_GUN: case MV_HYDRO_PUMP:
+      return FXS_JET;
+    case MV_FLAMETHROWER: case MV_FIRE_BLAST:
     case MV_SURF: case MV_BUBBLE: case MV_ACID: case MV_SLUDGE: case MV_BLIZZARD:
     case MV_ABSORB: case MV_MEGA_DRAIN:
       return FXS_STREAM;
@@ -189,6 +191,13 @@ BtlFx btlFx[BTL_FX_SLOTS];
 #define FX_MULTI_GAP 170
 #define FX_BURST_MS 380
 #define FX_DRAIN_MS 520
+// Water Gun / Hydro Pump: the jet's head reaches the target at FX_JET_HEAD, the
+// stream keeps pouring until FX_JET_HOLD, its tail then races after it for
+// FX_JET_TAIL, and the last of the splash settles over FX_JET_SPLASH.
+#define FX_JET_HEAD 280
+#define FX_JET_HOLD 620
+#define FX_JET_TAIL 170
+#define FX_JET_SPLASH 260
 
 void btlFxReset() {
   for (int i = 0; i < BTL_FX_SLOTS; i++) btlFx[i] = BtlFx();
@@ -263,6 +272,7 @@ static void fxTiming(BtlFx &f) {
     case FXS_HEAL:    imp = 0;   dur = 860; break;
     case FXS_CHARGE:  imp = 0;   dur = 720; break;
     case FXS_SELFHIT: imp = 60;  dur = 60 + FX_BURST_MS; break;
+    case FXS_JET:     imp = FX_JET_HEAD; dur = FX_JET_HOLD + FX_JET_TAIL + FX_JET_SPLASH; break;
     default: break;
   }
   if (f.drain) dur = imp + FX_BURST_MS / 2 + FX_DRAIN_MS;
@@ -447,6 +457,123 @@ static const uint16_t *fxStatPal(uint8_t mask) {
   return FX_PAL[T_NORMAL];
 }
 
+// A filled disc that respects the scene clip (fillCircle alone would spill into
+// the menu band below FX_CLIP_Y).
+static void fxDisc(int x, int y, int r, uint16_t col) {
+  if (r < 1 || !fxOnPanel(x, y)) return;
+  if (y + r >= FX_CLIP_Y) r = FX_CLIP_Y - 1 - y;
+  if (r >= 1) gfx->fillCircle(x, y, r, col); else gfx->fillRect(x, y, 1, 1, col);
+}
+
+// A point along the jet: a shallow arc from mouth to target, p in 0..1000.
+static void fxJetAt(int ax, int ay, int tx, int ty, int p, int &x, int &y) {
+  x = fxLerp(ax, tx, p);
+  y = fxLerp(ay, ty, p) - 26 * 4 * p / 1000 * (1000 - p) / 1000;
+}
+
+// Water Gun / Hydro Pump. A pressurised STREAM rather than tumbling drops: a
+// dark-rimmed body that thickens toward the head, a rippling highlight down its
+// back, bright dashes that race along it so it reads as flowing, droplets
+// peeling off its sides, and a fan of splash at the target while it pours.
+static void fxJet(const BtlFx &f, int t, int ax, int ay, int tx, int ty) {
+  const uint16_t *P = FX_PAL[f.type];
+  bool big = f.power >= 90;
+  int w0 = big ? 14 : 9, w1 = big ? 30 : 19;
+  int head = t >= FX_JET_HEAD ? 1000 : t * 1000 / FX_JET_HEAD;
+  int tail = t < FX_JET_HOLD ? 0 : (t - FX_JET_HOLD) * 1000 / FX_JET_TAIL;
+  if (tail > 1000) tail = 1000;
+  if (tail < head) {
+    // Built from overlapping discs ~5 px apart rather than straight segments:
+    // the lumpy outline is what makes it read as liquid instead of a pipe.
+    int x0, y0, x1, y1;
+    fxJetAt(ax, ay, tx, ty, tail, x0, y0);
+    fxJetAt(ax, ay, tx, ty, head, x1, y1);
+    int len = abs(x1 - x0) + abs(y1 - y0);
+    int N = len / 5;
+    if (N < 2) N = 2;
+    if (N > 60) N = 60;
+    for (int pass = 0; pass < 3; pass++)
+      for (int j = 0; j <= N; j++) {
+        int p = tail + (head - tail) * j / N;
+        int x, y;
+        fxJetAt(ax, ay, tx, ty, p, x, y);
+        // thicker toward the target, with a ripple travelling down its length
+        int w = w0 + (w1 - w0) * p / 1000;
+        w += (int)(w * 0.25f * sinf(p * 0.035f - t * 0.05f));
+        if (tail > 0) w = w * (1000 - tail / 2) / 1000;      // thins as it runs out
+        int r = w / 2 < 2 ? 2 : w / 2;
+        if (pass == 0) fxDisc(x, y, r + 2, P[1]);               // rim
+        else if (pass == 1) fxDisc(x, y, r, P[2]);              // water
+        else {
+          fxDisc(x - r / 4, y - r / 2, r / 3 + 1, P[3]);       // glint along the top
+          if (((j + t / 30) % 5) == 0) fxDisc(x - r / 4, y - r / 2, r / 4 + 1, P[4]);  // racing sparkle
+        }
+      }
+    if (head < 1000) {                                         // the blunt head
+      int r = w1 * 3 / 5;
+      fxDisc(x1, y1, r + 2, P[1]);
+      fxDisc(x1, y1, r, P[2]);
+      fxDisc(x1 - r / 3, y1 - r / 3, r / 3 + 1, P[4]);
+    }
+    // droplets peeling off the sides, each flung out and falling for 240 ms
+    for (int k = 0; k < (big ? 9 : 6); k++) {
+      int born = 40 + k * 70, q = t - born;
+      if (q < 0 || q > 240 || born > FX_JET_HOLD) continue;
+      int p = 120 + (k * 211) % 760;
+      if (p < tail || p > head) continue;
+      int x, y;
+      fxJetAt(ax, ay, tx, ty, p, x, y);
+      int side = (k & 1) ? 1 : -1;
+      x += side * q / 9;
+      y += -q / 7 + q * q / 2600;
+      fxDisc(x, y, big ? 3 : 2, P[3]);
+      fxDisc(x - 1, y - 1, 1, P[4]);
+    }
+  }
+  if (!f.land || t < FX_JET_HEAD) return;
+  // ---- the splash: a ring the moment it lands, then a fan of drops for as
+  // long as the jet pours, each arcing up and falling back
+  int st = t - FX_JET_HEAD;
+  if (st < 200) {                                 // a tight splash ring
+    int r = 10 + st / 8 + (big ? 6 : 0);
+    fxRing(tx, ty, r, 3, P[2]);
+    fxRing(tx, ty, r - 3, 1, P[4]);
+  }
+  int pourEnd0 = FX_JET_HOLD + FX_JET_TAIL - FX_JET_HEAD;
+  if (st < pourEnd0)                              // foam churning where it hits
+    for (int i = 0; i < (big ? 7 : 5); i++) {
+      int ph = (st / 40 + i * 3) % 8;
+      int dir = (i * 5 + st / 60) & 15;
+      int d = 4 + ph * (big ? 4 : 3);
+      fxDisc(tx + FX_COS[dir] * d / 1000, ty + FX_SIN(dir) * d / 1000,
+             (big ? 7 : 5) - ph * (big ? 7 : 5) / 9, ph & 1 ? P[4] : P[3]);
+    }
+  if (f.crit && st < 240)
+    for (int i = 0; i < 16; i += 2) {
+      int r0 = 28 + st / 3, r1 = r0 + 22;
+      fxThick(tx + FX_COS[i] * r0 / 1000, ty + FX_SIN(i) * r0 / 1000,
+              tx + FX_COS[i] * r1 / 1000, ty + FX_SIN(i) * r1 / 1000, 3, 0xFFFF);
+    }
+  int pourEnd = FX_JET_HOLD + FX_JET_TAIL - FX_JET_HEAD;   // last moment water arrives
+  int n = big ? 14 : 9;
+  if (f.superEff) n += 4;
+  const int life = 300;
+  for (int i = 0; i < n; i++) {
+    // drops are emitted in a steady cycle while the water is arriving
+    int cyc = (i * life) / n;
+    for (int born = cyc; born <= pourEnd; born += life) {
+      int q = st - born;
+      if (q < 0 || q >= life) continue;
+      int ang = 9 + (i * 5) % 7;               // 9..15 of 16: up-left .. up-right
+      int sp = (big ? 150 : 110) + (i % 3) * 25 + (f.superEff ? 30 : 0);
+      int x = tx + FX_COS[ang & 15] * sp / 1000 * q / 300;
+      int y = ty + 6 + FX_SIN(ang & 15) * sp / 1000 * q / 300 + q * q / 900;
+      if (q < life - 80) fxSpr(FXP_DROP, x, y, (big && (i % 3 == 0)) ? 2 : 1, P, q > 150 ? 2 : 0);
+      else fxDisc(x, y, 2, P[3]);
+    }
+  }
+}
+
 static void fxDrawOne(const BtlFx &f, uint32_t now) {
   if (f.shape == FXS_NONE || now < f.t0 || now >= f.t0 + f.dur) return;
   int t = (int)(now - f.t0);
@@ -481,6 +608,9 @@ static void fxDrawOne(const BtlFx &f, uint32_t now) {
       }
       break;
     }
+    case FXS_JET:
+      fxJet(f, t, ax, ay, tx, ty);
+      return;                                 // it draws its own splash
     case FXS_STREAM: {
       // a gush of particles for ~half a second, each crossing in 260 ms
       int s = f.power >= 90 ? 3 : 2;

@@ -276,7 +276,8 @@ needles, orbs, sparkles and hearts.
 | Look | Moves |
 |---|---|
 | Beam | HYPER BEAM, SOLAR BEAM, ICE BEAM, AURORA BEAM, PSYBEAM, FLASH CANNON, DRAGON RAGE |
-| Stream of particles | FLAMETHROWER, FIRE BLAST, WATER GUN, HYDRO PUMP, SURF, BUBBLE, ACID, SLUDGE, BLIZZARD, ABSORB, MEGA DRAIN |
+| Water jet: one unbroken, rippling stream that reaches the target in 280 ms, pours until 620 ms with foam and a fan of drops at the target, then its tail chases after it (1.05 s in all; HYDRO PUMP is about half again as thick) | WATER GUN, HYDRO PUMP |
+| Stream of particles | FLAMETHROWER, FIRE BLAST, SURF, BUBBLE, ACID, SLUDGE, BLIZZARD, ABSORB, MEGA DRAIN |
 | Lightning from above | THUNDERSHOCK, THUNDERBOLT, THUNDER |
 | Falling rocks | ROCK THROW, ROCK SLIDE, ANCIENTPOWER |
 | Quake (the screen shakes) | EARTHQUAKE, DIG, SEISMIC TOSS |
