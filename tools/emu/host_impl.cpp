@@ -133,6 +133,9 @@ bool pwrShortPressed() { return false; }
 // --- audio (silent) ---
 void audioBegin() {}
 void sfxPlay(uint8_t) {}
+// The last rising blip asked for, so training_ui_test can hear a combo climb.
+int g_emuRiseLast = -1, g_emuRiseCount = 0;
+void sfxRise(uint8_t step) { g_emuRiseLast = step; g_emuRiseCount++; }
 // no radio here; the protocol itself is exercised by tests/link_test.cpp
 struct Link;
 // No radio here at all, which is why lossy_test drives Link directly instead

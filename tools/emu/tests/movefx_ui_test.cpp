@@ -124,6 +124,21 @@ int main() {
   while (millis() < btlFxEndOf(0)) { render(); int n = countCol(0x869E); if (n > peak) peak = n; slp(20); }
   ck(peak > before + 200, "ICE BEAM draws an ice beam");
 
+  // Water Gun is a solid jet now, not Flamethrower's tumbling particles: one
+  // unbroken body of water from mouth to target (thousands of WATER pixels at
+  // once, where the old drop stream peaked at a few hundred).
+  ck(moveFxShape(MV_WATER_GUN) != moveFxShape(MV_FLAMETHROWER) &&
+     moveFxShape(MV_WATER_GUN) == moveFxShape(MV_HYDRO_PUMP),
+     "WATER GUN and HYDRO PUMP share their own jet look");
+  setup1v1(MV_WATER_GUN, MV_RECOVER, 900);
+  before = countCol(0x2C7F);                   // WATER's main tone
+  fight(); peak = 0;
+  while (millis() < btlFxEndOf(0)) { render(); int n = countCol(0x2C7F); if (n > peak) peak = n; slp(20); }
+  printf("      water pixels: %d before, %d at the peak\n", before, peak);
+  ck(peak > before + 1500, "WATER GUN pours one unbroken jet of water");
+  waitUntil(btlFxEnd() + 10); render();
+  ck(countCol(0x2C7F) <= before + 10, "and the water is all gone once it ends");
+
   // a status move on yourself shows too
   setup1v1(MV_SWORDS_DANCE, MV_RECOVER, 900);
   before = countCol(0xFC00);

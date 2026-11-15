@@ -1095,7 +1095,8 @@ void Pet::feedCandy() {
   save();
 }
 
-uint8_t Pet::playResult(uint8_t score) {
+uint8_t Pet::playResult(uint8_t score) { return playResult(score, score); }
+uint8_t Pet::playResult(uint8_t score, uint16_t eff) {
   if (ceremony != CER_NONE || isEgg()) return 0;
   // The ball game is DEFENCE's trainer now. It used to train SPEED, which was
   // moved to its own reaction test to stop playing being a stat grind -- and
@@ -1103,8 +1104,8 @@ uint8_t Pet::playResult(uint8_t score) {
   // Keeping the ball on the defensive stat fits it: you are stopping something
   // from getting past you.
   uint8_t before = trDef;
-  uint8_t gain = score / 2;
-  if (gain > 18) gain = 18;          // the same per-session ceiling as the bag
+  uint16_t g = eff / 2;
+  uint8_t gain = g > 18 ? 18 : (uint8_t)g;          // the same per-session ceiling as the bag
   uint16_t v = (uint16_t)trDef + gain;
   trDef = v > trMaxDef() ? trMaxDef() : (uint8_t)v;
   gain = trDef - before;
@@ -1153,10 +1154,11 @@ uint8_t Pet::rewardTraining(uint8_t amount, uint8_t &which) {
   return amount;
 }
 
-uint8_t Pet::trainSpeed(uint16_t hits) {
+uint8_t Pet::trainSpeed(uint16_t hits) { return trainSpeed(hits, hits); }
+uint8_t Pet::trainSpeed(uint16_t hits, uint16_t eff) {
   if (ceremony != CER_NONE || isEgg()) return 0;
-  uint8_t gain = hits / 2;          // ~2 reactions = 1 point
-  if (gain > 18) gain = 18;         // same per-session ceiling as the bag
+  uint16_t g = eff / 2;             // ~2 reactions = 1 point
+  uint8_t gain = g > 18 ? 18 : (uint8_t)g;   // same per-session ceiling as the bag
   uint8_t before = trSpe;
   uint8_t v = trSpe + gain;
   trSpe = v > trMaxSpe() ? trMaxSpe() : v;   // el IV pone el techo
@@ -1179,10 +1181,11 @@ uint8_t Pet::trainSpeed(uint16_t hits) {
   return gain;
 }
 
-uint8_t Pet::trainStrength(uint16_t hits) {
+uint8_t Pet::trainStrength(uint16_t hits) { return trainStrength(hits, hits); }
+uint8_t Pet::trainStrength(uint16_t hits, uint16_t eff) {
   if (ceremony != CER_NONE || isEgg()) return 0;
-  uint8_t gain = hits / 4;          // ~4 golpes = 1 punto de entrenamiento
-  if (gain > 18) gain = 18;         // tope por sesion: la FUE se forja a fuego lento
+  uint16_t g = eff / 4;             // ~4 hits = 1 training point
+  uint8_t gain = g > 18 ? 18 : (uint8_t)g;   // per-session ceiling
   uint8_t before = trAtk;
   uint8_t v = trAtk + gain;
   trAtk = v > trMaxAtk() ? trMaxAtk() : v;  // el IV pone el techo

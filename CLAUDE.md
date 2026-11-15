@@ -271,6 +271,15 @@ Faints and the win screen (`btlWinFrom`) wait for `btlFxEnd()`. Any new place th
 deals damage in a fight must go through it, or its hit lands before its effect.
 `movefx_ui_test` covers it.
 
+**Training games (v3.17)** live in `ui_train.ino` (moved out of TamaPoke.ino;
+the globals the main sketch touches stay there). Each game keeps a RAW count
+(`sackHits`/`spdHits`/`gameScore`, still what `strHi`/`spdHi`/`gameHi` record)
+and a POINTS total; the stat gain reads `sackEff()`/`spdEff()`/`gameEff()` via
+the two-argument `Pet::trainStrength/trainSpeed/playResult(raw, eff)`. The
+natural end, leaving early and the results grade all ask those, so do not
+compute a gain anywhere else. `training_ui_test` covers it; numbers in README
+"Training games".
+
 `tests/run.sh` no longer needs SDL (only the clickable emulator does);
 `SKIP_FW=1` skips its arduino-cli step.
 

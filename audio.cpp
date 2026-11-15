@@ -196,7 +196,14 @@ static void audioTask(void *) {
     // mixed politely underneath would just be mud; cutting through is both
     // simpler and the right priority.
     if (xQueueReceive(gQ, &id, wantAudio ? 0 : pdMS_TO_TICKS(40)) == pdTRUE) {
-      if (gOn && gReady && id < SFX_COUNT) {
+      if (gOn && gReady && (id & 0x80)) {   // sfxRise: one rising blip
+        static const uint16_t RISE[SFX_RISE_STEPS] = { 523, 587, 659, 698, 784, 880,
+                                                      988, 1047, 1175, 1319, 1397, 1568 };
+        if (!ampOn) { digitalWrite(PA, HIGH); delay(6); ampOn = true; }
+        uint8_t st = id & 0x7F;
+        gSyn.note(0, hzToGb(RISE[st < SFX_RISE_STEPS ? st : SFX_RISE_STEPS - 1]), 2, 13, -1, 2, 50);
+        pump(50);
+      } else if (gOn && gReady && id < SFX_COUNT) {
         if (!ampOn) { digitalWrite(PA, HIGH); delay(6); ampOn = true; }
         const SfxDef &d = SFX[id];
         for (uint8_t i = 0; i < d.len; i++) {
@@ -293,6 +300,11 @@ void audioBegin() {
 
 void sfxPlay(uint8_t id) {
   if (gReady && gOn && gQ) xQueueSend(gQ, &id, 0);  // descarta si la cola esta llena
+}
+
+void sfxRise(uint8_t step) {
+  uint8_t id = 0x80 | (step < SFX_RISE_STEPS ? step : SFX_RISE_STEPS - 1);
+  if (gReady && gOn && gQ) xQueueSend(gQ, &id, 0);
 }
 
 void audioSetEnabled(bool on) {

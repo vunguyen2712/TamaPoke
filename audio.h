@@ -38,5 +38,10 @@ uint8_t audioVolume();
 
 void audioBegin();          // init ES8311 + I2S + amplificador + tarea de audio
 void sfxPlay(uint8_t id);   // encola un efecto (no bloquea el loop)
+// A short blip whose pitch climbs with `step` (0..11, a C major scale over two
+// octaves, clamped). The training games play it on every link of a combo so a
+// streak is heard rising; the queue drops it when full, like any effect.
+#define SFX_RISE_STEPS 12
+void sfxRise(uint8_t step);
 void audioSetEnabled(bool on);
 bool audioEnabled();

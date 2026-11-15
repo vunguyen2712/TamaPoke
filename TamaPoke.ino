@@ -24,6 +24,7 @@
 #include "linknow.h"
 #include "backs.h"
 #include "badges.h"
+#include "badges_extra.h"   // Alola + every Elite 4 / Champion emblem (original art)
 #include "avatars.h"
 #include <stdarg.h>
 #include "party.h"
@@ -46,7 +47,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "3.16"
+#define FW_VERSION "3.17"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -195,7 +196,7 @@ uint32_t gameOverUntil = 0;
 // the clock or three misses -- ends it.
 #define GAME_MS 20000UL
 uint32_t gameUntil = 0;
-float ballX, ballY, ballVX, ballVY, gamePetX;
+float gamePetX;               // the creature under the balls (ui_train.ino)
 uint8_t gameScore, gameMisses;
 float hitX, hitY;             // ultimo golpe (anillo de impacto)
 uint32_t hitTime = 0;
@@ -205,7 +206,6 @@ bool gameNewHi = false;
 bool sackOpen = false;
 uint32_t sackUntil = 0, sackOverUntil = 0;
 uint16_t sackHits = 0;
-float sackShake = 0;
 uint8_t sackGain = 0;
 bool sackNewHi = false;
 
@@ -276,26 +276,107 @@ const char *const SCREEN_NAME[SCR_COUNT] = {
   "main"
 };
 
-// Badge art for a region, or nullptr when that region has none yet.
+// Badge art for ladder slot i (0..TRAINER_COUNT-1) of a region, or nullptr.
+// THE single answer: the win screen, the player card, the gym ladder rows and
+// the region chooser strip all ask this, none of them indexes an array itself.
 //
-// NEVER `BADGES_ART[region % BADGE_REGIONS]`. The moment GYM_REGIONS outgrew
-// BADGE_REGIONS -- which happened when Kalos landed and the upstream badge set
-// stops at Unova -- 5 % 5 = 0 silently dressed Kalos in KANTO's badges, on both
-// the win screen and the player card. A wrong badge is worse than an honest
-// blank: it claims you won something you did not. The callers draw a
-// placeholder instead, and static_assert below stops the array being indexed
-// out of range whatever the two counts are.
+//   slots 0-7  the gym badges: BADGES_ART (upstream sheets, badges.h) for the
+//              first BADGE_REGIONS ladders, then Alola's original set
+//              (badges_extra.h) -- Alola has captains and kahunas, not gyms
+//   slots 8-12 the Elite 4 shapes and the champion crest, every region:
+//              EMBLEMS_ART, tinted per region and per the trainer's type
+//
+// NEVER `BADGES_ART[region % BADGE_REGIONS]`. When GYM_REGIONS first outgrew
+// BADGE_REGIONS (Kalos, before its sheet existed), 5 % 5 = 0 silently dressed
+// Kalos in KANTO's badges. A wrong badge is worse than an honest blank: it
+// claims you won something you did not. The static_asserts below pin how the
+// two generated headers line up with the ladders, so a region added to
+// trainers.h without art fails the build instead of borrowing someone's.
 static_assert(BADGE_REGIONS <= GYM_REGIONS,
               "more badge sheets than ladders -- BADGES_ART would be indexed by a region that does not exist");
+static_assert(BADGE_ALOLA_REGION == BADGE_REGIONS && BADGE_ALOLA_REGION < GYM_REGIONS,
+              "Alola's original badges must sit right after the upstream sheets");
+static_assert(BADGE_ALOLA_REGION + 1 == GYM_REGIONS,
+              "a ladder past Alola has no gym badge art: draw it in tools/gen_badges_extra.py");
+static_assert(EMBLEM_REGIONS == GYM_REGIONS,
+              "every ladder needs its Elite 4 / Champion emblems: re-run tools/gen_badges_extra.py");
+static_assert(TRAINER_GYMS + EMBLEM_SLOTS == TRAINER_COUNT,
+              "one emblem per Elite 4 member plus the champion");
 static const BadgeArt *badgeArtFor(uint8_t region, uint8_t i) {
-  if (region >= BADGE_REGIONS || i >= TRAINER_GYMS) return nullptr;
-  return &BADGES_ART[region][i];
+  if (region >= GYM_REGIONS || i >= TRAINER_COUNT) return nullptr;
+  if (i >= TRAINER_GYMS) return &EMBLEMS_ART[region][i - TRAINER_GYMS];
+  if (region < BADGE_REGIONS) return &BADGES_ART[region][i];
+  if (region == BADGE_ALOLA_REGION) return &BADGES_ALOLA_ART[i];
+  return nullptr;
+}
+
+// Draws ladder slot i's badge centred on (cx, cy). scale 1 or more multiplies
+// it up; scale 0 draws it at HALF size (16 px) for the region chooser strip,
+// each output pixel the most common colour of its 2x2 block so thin outlines
+// survive. `ghost` draws only the silhouette in `ghostCol` -- the faint outline
+// of a badge not yet earned. Returns false if there is no art to draw.
+static bool drawBadgeAt(uint8_t region, uint8_t i, int cx, int cy, uint8_t scale,
+                        bool ghost = false, uint16_t ghostCol = 0) {
+  const BadgeArt *a = badgeArtFor(region, i);
+  if (!a) return false;
+  if (scale == 0) {
+    const int H = BADGE_PX / 2;
+    for (int r = 0; r < H; r++)
+      for (int c = 0; c < H; c++) {
+        uint8_t v[4] = { a->idx[(2 * r) * BADGE_PX + 2 * c], a->idx[(2 * r) * BADGE_PX + 2 * c + 1],
+                         a->idx[(2 * r + 1) * BADGE_PX + 2 * c], a->idx[(2 * r + 1) * BADGE_PX + 2 * c + 1] };
+        uint8_t best = 0xFF, bestN = 0, opaque = 0;
+        for (int k = 0; k < 4; k++) {
+          if (v[k] == 0xFF) continue;
+          opaque++;
+          uint8_t n = 0;
+          for (int m = 0; m < 4; m++) n += (v[m] == v[k]);
+          if (n > bestN) { bestN = n; best = v[k]; }
+        }
+        if (opaque < 2) continue;
+        gfx->fillRect(cx - H / 2 + c, cy - H / 2 + r, 1, 1, ghost ? ghostCol : a->pal[best]);
+      }
+    return true;
+  }
+  int x0 = cx - BADGE_PX * scale / 2, y0 = cy - BADGE_PX * scale / 2;
+  for (int r = 0; r < BADGE_PX; r++)
+    for (int c = 0; c < BADGE_PX; c++) {
+      uint8_t v = a->idx[r * BADGE_PX + c];
+      if (v == 0xFF) continue;
+      if (ghost) {
+        // only the rim: a pixel with a transparent (or off-art) neighbour
+        bool edge = (c == 0 || a->idx[r * BADGE_PX + c - 1] == 0xFF) ||
+                    (c == BADGE_PX - 1 || a->idx[r * BADGE_PX + c + 1] == 0xFF) ||
+                    (r == 0 || a->idx[(r - 1) * BADGE_PX + c] == 0xFF) ||
+                    (r == BADGE_PX - 1 || a->idx[(r + 1) * BADGE_PX + c] == 0xFF);
+        if (!edge) continue;
+      }
+      uint16_t col = ghost ? ghostCol : a->pal[v];
+      gfx->fillRect(x0 + c * scale, y0 + r * scale, scale, scale, col);
+    }
+  return true;
+}
+
+// The golden halo of a hard-mode win: concentric rings, not a filled disc -- a
+// disc sat behind the art and read as a gold coin rather than a glow.
+static void drawHardHalo(int cx, int cy, int r) {
+  static const uint16_t RING[5] = { 0xFDE0, 0xFEA0, 0xFF60, 0xFEA0, 0xFDE0 };
+  for (int k = 0; k < 5; k++) gfx->drawCircle(cx, cy, r - k, RING[k]);
 }
 
 // Does this region have its own badge art? Split out with a primitive return
 // type so the tests can ask: the emulator's genproto.py emits every prototype
 // ABOVE the includes, where the BadgeArt struct does not exist yet.
 bool badgeArtExists(uint8_t region, uint8_t i) { return badgeArtFor(region, i) != nullptr; }
+// One pixel of that art as RGB565, or -1 where it is transparent or there is no
+// art. Same reason for the primitive types: the tests read the art through the
+// one function every screen asks, rather than through the arrays.
+int32_t badgeArtPixel(uint8_t region, uint8_t i, uint8_t x, uint8_t y) {
+  const BadgeArt *a = badgeArtFor(region, i);
+  if (!a || x >= BADGE_PX || y >= BADGE_PX) return -1;
+  uint8_t v = a->idx[y * BADGE_PX + x];
+  return v == 0xFF ? -1 : (int32_t)a->pal[v];
+}
 
 Combatant btlYou, btlFoe;
 bool btlOver = false;
@@ -314,8 +395,7 @@ uint32_t btlWinFrom = 0;    // ...from here: the final blow plays out first
 // dead end rather than a challenge.
 // reaction test (trains SPEED)
 bool spdOpen = false;
-uint32_t spdUntil = 0, spdOverUntil = 0, spdBorn = 0;
-int16_t spdX = 0, spdY = 0;
+uint32_t spdUntil = 0, spdOverUntil = 0;
 uint16_t spdHits = 0, spdMisses = 0;
 uint8_t spdGain = 0;
 bool spdNewHi = false;
@@ -1223,7 +1303,7 @@ void handleTouch() {
     if (pressed && !wasPressed) {
       lastInteract = millis();
       if (y < 72) leaveSack();       // tocar arriba = salir, conservando lo ganado
-      else sackTap();
+      else sackTap(x, y);            // timing, weak spot: ui_train.ino
     }
     wasPressed = pressed;
     return;
@@ -2514,340 +2594,7 @@ void render() {
   gfx->flush();
 }
 
-// ---------- minijuego: toques con la pokeball ----------
-
-void startGame() {
-  if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
-  gameOpen = true;
-  gameOverUntil = 0;
-  gameUntil = millis() + GAME_MS;
-  gameScore = 0;
-  gameMisses = 0;
-  gameNewHi = false;
-  hitTime = 0;
-  gamePetX = 233;
-  respawnBall();
-}
-
-void respawnBall() {
-  ballX = 150 + random(166);
-  ballY = 96;
-  float sp = 1.6f + gameScore * 0.05f;  // mas viva segun avanzas
-  if (sp > 4.0f) sp = 4.0f;
-  ballVX = random(2) ? sp : -sp;
-  ballVY = 0;
-}
-
-// Leaving a minigame early banks what was actually earned rather than voiding
-// it. Quitting used to forfeit everything, which mattered little when the ball
-// game trained a stat you could grind back -- but it is now purely about
-// happiness, and a pet that just played should be happier for it. The
-// gameOver/over guards stop a swipe during the results screen paying twice.
-void leaveGame() {
-  if (!gameOverUntil) pet.playResult(gameScore);
-  gameOpen = false;
-}
-void leaveSack() {
-  if (!sackOverUntil) pet.trainStrength(sackHits);
-  sackOpen = false;
-}
-void leaveSpeed() {
-  if (!spdOverUntil) pet.trainSpeed(spdHits);
-  spdOpen = false;
-}
-
-void gameTap(int16_t x, int16_t y) {
-  if (gameOverUntil) return;
-  // The ball is checked BEFORE the quit strip. The ball bounces inside a circle
-  // of radius 205 about the centre, so it reaches y=28 -- well inside the y<72
-  // header. Reaching up to hit a high ball used to abandon the game instead,
-  // silently forfeiting the score, the speed training and the record.
-  float dx = ballX - x, dy = ballY - y;
-  bool onBall = (dx * dx + dy * dy < 74 * 74);
-  if (!onBall && y < 72) {  // tocar la cabecera = salir, conservando lo ganado
-    leaveGame();
-    return;
-  }
-  if (onBall) {  // toque a la bola!
-    gameScore++;
-    sfxPlay(SFX_PLAY);
-    // golpe mas suave: impulso moderado que crece poco a poco con la puntuacion
-    float lift = 6.6f + (gameScore > 16 ? 3.5f : gameScore * 0.22f);
-    ballVY = -lift;
-    ballVX += dx * 0.12f;
-    if (ballVX > 6.5f) ballVX = 6.5f;
-    if (ballVX < -6.5f) ballVX = -6.5f;
-    hitX = ballX;
-    hitY = ballY;
-    hitTime = millis();
-  }
-}
-
-void stepGame() {
-  float grav = 0.40f + gameScore * 0.013f;  // cae un poco mas rapido cada vez
-  if (grav > 0.80f) grav = 0.80f;
-  ballVY += grav;
-  ballX += ballVX;
-  ballY += ballVY;
-  // rebote en la pared circular
-  float dx = ballX - CX, dy = ballY - CY;
-  float d = sqrtf(dx * dx + dy * dy);
-  if (d > 205) {
-    float nx = dx / d, ny = dy / d;
-    float dot = ballVX * nx + ballVY * ny;
-    if (dot > 0) {
-      ballVX = (ballVX - 2 * dot * nx) * 0.85f;
-      ballVY = (ballVY - 2 * dot * ny) * 0.85f;
-    }
-    ballX = CX + nx * 205;
-    ballY = CY + ny * 205;
-  }
-  // the clock, or three misses, whichever lands first
-  if (gameUntil && millis() >= gameUntil && !gameOverUntil) {
-    gameNewHi = (gameScore > pet.gameHi);
-    pet.playResult(gameScore);
-    sfxPlay(gameNewHi && gameScore > 0 ? SFX_MEDAL : SFX_LEVEL);
-    gameOverUntil = millis() + 4000;
-    return;
-  }
-  if (ballY > 384) {  // al suelo
-    if (++gameMisses >= 3) {
-      gameNewHi = (gameScore > pet.gameHi);
-      pet.playResult(gameScore);  // actualiza el record y da felicidad
-      sfxPlay(gameNewHi && gameScore > 0 ? SFX_MEDAL : SFX_LEVEL);
-      gameOverUntil = millis() + 4000;
-    } else {
-      respawnBall();
-    }
-  }
-  // el bicho la sigue por abajo
-  float chase = (ballX - gamePetX) * 0.12f;
-  if (chase > 7) chase = 7;
-  if (chase < -7) chase = -7;
-  gamePetX += chase;
-}
-
-// ---------- saco de entrenamiento (entrena la fuerza) ----------
-
-void startSack() {
-  if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
-  sackOpen = true;
-  sackUntil = millis() + 10000;
-  sackOverUntil = 0;
-  sackHits = 0;
-  sackShake = 0;
-  sackNewHi = false;
-}
-
-void sackTap() {
-  if (millis() >= sackUntil) return;  // ya termino el tiempo
-  sackHits++;
-  sackShake = 16;  // sacude el saco
-}
-
-void drawGameScene();  // prototipo (definida mas abajo)
-
-void renderSack() {
-  uint32_t now = millis();
-  drawGameScene();  // fondo del habitat
-  bool night = sceneHour() < 6 || sceneHour() >= 20;
-  uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
-
-  // pantalla de resultado
-  if (sackOverUntil) {
-    if (now > sackOverUntil) { sackOpen = false; return; }
-    char b[20];
-    snprintf(b, sizeof(b), T(S_HITS_FMT), sackHits);
-    gfx->setTextColor(ink);
-    gfx->setTextSize(4);
-    gfx->setCursor(CX - strlen(b) * 12, 150);
-    gfx->print(b);
-    char g[18];
-    snprintf(g, sizeof(g), T(S_STR_GAIN_FMT), sackGain);
-    gfx->setTextColor(UI_BAR_BAD);
-    gfx->setTextSize(3);
-    gfx->setCursor(CX - strlen(g) * 9, 210);
-    gfx->print(g);
-    gfx->setTextSize(2);
-    if (sackNewHi && sackHits > 0) {
-      gfx->setTextColor(UI_BAR_WARN);
-      gfx->setCursor(CX - strlen(T(S_NEW_RECORD)) * 6, 256);
-      gfx->print(T(S_NEW_RECORD));
-    } else {
-      char r[18];
-      snprintf(r, sizeof(r), T(S_RECORD_FMT), pet.strHi);
-      gfx->setTextColor(ink);
-      gfx->setCursor(CX - strlen(r) * 6, 256);
-      gfx->print(r);
-    }
-    gfx->flush();
-    return;
-  }
-
-  // se acabaron los 10 s: aplicar entrenamiento
-  if (now >= sackUntil) {
-    sackNewHi = (sackHits > pet.strHi);
-    sackGain = pet.trainStrength(sackHits);
-    sfxPlay(sackNewHi ? SFX_MEDAL : SFX_PLAY);
-    sackOverUntil = now + 3500;
-    gfx->flush();
-    return;
-  }
-
-  // aporreo activo
-  sackShake *= 0.84f;
-  int off = (int)(sackShake * sinf(now * 0.05f));
-  int sx = CX + off, top = 86, sy = 150;
-  gfx->fillRect(CX - 3, 56, 6, top - 56, ink);          // gancho/cuerda
-  gfx->fillRect(sx - 4, top - 30, 8, 34, ink);          // cadena
-  gfx->fillRoundRect(sx - 42, top, 84, 150, 26, C565(0xb5, 0x3a, 0x3a));  // saco
-  gfx->fillRoundRect(sx - 42, top, 84, 22, 18, C565(0x7e, 0x28, 0x28));   // tapa
-  gfx->drawRoundRect(sx - 42, top, 84, 150, 26, ink);
-  gfx->fillRect(sx - 42, top + 70, 84, 4, C565(0x7e, 0x28, 0x28));        // costura
-
-  // contador de golpes
-  char buf[8];
-  snprintf(buf, sizeof(buf), "%u", sackHits);
-  gfx->setTextColor(ink);
-  gfx->setTextSize(6);
-  gfx->setCursor(CX - strlen(buf) * 18, 268);
-  gfx->print(buf);
-
-  gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(T(S_HIT_FAST)) * 6, 322);
-  gfx->print(T(S_HIT_FAST));
-
-  // barra de tiempo
-  uint32_t left = sackUntil - now;
-  int bw = 280, fw = (int)((uint32_t)bw * left / 10000);
-  gfx->fillRoundRect(CX - bw / 2, 350, bw, 16, 5, UI_TRACK);
-  if (fw > 2) gfx->fillRoundRect(CX - bw / 2, 350, fw, 16, 5, UI_BAR_OK);
-
-  gfx->flush();
-}
-
-// fondo del minijuego: hatibat del bicho (cielo por hora + suelo del bioma)
-void drawGameScene() {
-  int hh = sceneHour();
-  bool night = hh < 6 || hh >= 20;
-  uint16_t top, bot;
-  if (night)       { top = C565(0x0c, 0x12, 0x24); bot = C565(0x1e, 0x26, 0x46); }
-  else if (hh < 8) { top = C565(0xd1, 0x6a, 0x86); bot = C565(0xf3, 0xb8, 0x7c); }
-  else if (hh < 18){ top = C565(0x8f, 0xc8, 0xea); bot = C565(0xdc, 0xee, 0xe6); }
-  else             { top = C565(0xc7, 0x5a, 0x4a); bot = C565(0xf0, 0xae, 0x64); }
-  int hor = 376;
-  for (int y = 0; y < hor; y += 8)
-    gfx->fillRect(0, y, 466, 8, lerp565(top, bot, y, hor));
-  if (night)
-    for (auto &st : STARS) gfx->fillRect(st[0], st[1], 4, 4, UI_WHITE);
-  uint8_t bio = pet.isEgg() ? 0 : DEX_TBL[pet.speciesId].biome;
-  uint16_t soil = BIOME_SOIL[bio < 6 ? bio : 0];
-  if (night) soil = lerp565(soil, C565(0x16, 0x1c, 0x30), 9, 16);
-  gfx->fillRect(0, hor, 466, 466 - hor, soil);
-}
-
-void renderGame() {
-  // sin fillScreen(NEGRO): drawGameScene cubre los 466x466 completos. Si el
-  // DMA del flush anterior aun lee el buffer, vera contenido valido (no negro
-  // a medio pintar), que era el parpadeo a 25 fps.
-  bool night = sceneHour() < 6 || sceneHour() >= 20;
-  uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
-
-  if (gameOverUntil) {
-    drawGameScene();
-    if (millis() > gameOverUntil) {
-      gameOpen = false;
-      return;
-    }
-    char buf[22];
-    snprintf(buf, sizeof(buf), T(S_SCORE_FMT), gameScore);
-    gfx->setTextColor(ink);
-    gfx->setTextSize(4);
-    gfx->setCursor(CX - strlen(buf) * 12, 160);
-    gfx->print(buf);
-    gfx->setTextSize(2);
-    if (gameNewHi && gameScore > 0) {
-      gfx->setTextColor(UI_BAR_WARN);
-      gfx->setCursor(CX - strlen(T(S_NEW_RECORD)) * 6, 214);
-      gfx->print(T(S_NEW_RECORD));
-    } else {
-      char rec[20];
-      snprintf(rec, sizeof(rec), T(S_RECORD_FMT), pet.gameHi);
-      gfx->setTextColor(ink);
-      gfx->setCursor(CX - strlen(rec) * 6, 214);
-      gfx->print(rec);
-    }
-    const char *msg = gameScore >= 10 ? T(S_GREAT_JOY) : T(S_PLUS_JOY);
-    gfx->setTextColor(ink);
-    gfx->setCursor(CX - strlen(msg) * 6, 250);
-    gfx->print(msg);
-    gfx->flush();
-    return;
-  }
-
-  drawGameScene();
-  stepGame();
-
-  // marcador, record y vidas
-  char buf[8];
-  snprintf(buf, sizeof(buf), "%u", gameScore);
-  gfx->setTextColor(ink);
-  gfx->setTextSize(4);
-  gfx->setCursor(CX - strlen(buf) * 12, 30);
-  gfx->print(buf);
-  char rec[12];
-  snprintf(rec, sizeof(rec), T(S_REC_FMT), pet.gameHi);
-  gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(rec) * 6, 76);
-  gfx->print(rec);
-  for (int i = 0; i < 3; i++) {
-    if (i < 3 - gameMisses) gfx->fillCircle(180 + i * 28, 104, 6, UI_BAR_BAD);
-    else gfx->drawCircle(180 + i * 28, 104, 6, UI_TRACK);
-  }
-  // The clock, drawn like the bag's and the reaction test's so all three games
-  // read the same way. Thin and near the rim: the middle belongs to the ball.
-  if (!gameOverUntil) {
-    uint32_t now2 = millis();
-    uint32_t left = (gameUntil > now2) ? gameUntil - now2 : 0;
-    int bw = 200, fw = (int)((uint32_t)bw * left / GAME_MS);
-    gfx->fillRoundRect(CX - bw / 2, 124, bw, 10, 4, UI_TRACK);
-    if (fw > 2)
-      gfx->fillRoundRect(CX - bw / 2, 124, fw, 10, 4,
-                         left < 5000 ? UI_BAR_WARN : UI_BAR_OK);
-  }
-
-  if (pmd.loaded) {
-    uint8_t act = (ballX > gamePetX + 4) ? PMD_WALKR : (ballX < gamePetX - 4) ? PMD_WALKL : PMD_IDLE;
-    if (!pmd.has(act)) act = PMD_IDLE;
-    drawPmdAct(act, (int)gamePetX, 394, millis(), true, false, 3);
-  } else if (mon.loaded) {
-    int s = (mon.h * 2 > 130) ? 1 : 2;
-    int w = mon.w * s, h = mon.h * s;
-    uint16_t fm = mon.frameMs ? mon.frameMs : 100;
-    uint16_t fi = (millis() / fm) % mon.frames;
-    const uint8_t *fr = mon.data + (uint32_t)fi * mon.w * mon.h;
-    int px = (int)gamePetX - w / 2, py = 394 - h;
-    for (int r = 0; r < mon.h; r++)
-      for (int c = 0; c < mon.w; c++) {
-        uint8_t idx = fr[r * mon.w + c];
-        if (idx == 0xFF) continue;
-        gfx->fillRect(px + c * s, py + r * s, s, s, mon.pal[idx]);
-      }
-  }
-
-  // anillo de impacto que se expande y desvanece (feedback suave del golpe)
-  uint32_t ht = millis() - hitTime;
-  if (hitTime && ht < 260) {
-    int rad = 22 + (int)(ht / 6);
-    gfx->drawCircle((int)hitX, (int)hitY, rad, C565(0xff, 0xe7, 0x9f));
-    gfx->drawCircle((int)hitX, (int)hitY, rad - 2, C565(0xff, 0xd9, 0x8a));
-  }
-
-  // la pokeball
-  drawMap(SPR_ICON_PLAY, 16, (int)ballX - 24, (int)ballY - 24, 3, false);
-
-  gfx->flush();
-}
+// The three training games (bag, reaction test, ball) live in ui_train.ino.
 
 // ---------- ficha del bicho (deslizar vertical) ----------
 
@@ -4003,33 +3750,18 @@ void renderWin() {
   // rematch has no badge to show: it draws its own reward instead.
   if (btlKind == BK_REMATCH) {
     towerWinBody();
-  } else if (btlTrainer < TRAINER_GYMS) {
+  } else if (btlTrainer >= 0 && btlTrainer < TRAINER_COUNT) {
+    // Every ladder win has art now: the eight gym badges, and an emblem for
+    // each Elite 4 member and the champion. 3x, so it reads as a prize rather
+    // than a list entry.
     int by = 190;
-    if (btlHard) {
-      for (int r = 62; r >= 56; r--) gfx->drawCircle(CX, by, r, r % 2 ? 0xFEA0 : 0xFF60);
-    }
-    const BadgeArt *a = badgeArtFor(btlRegion, btlTrainer);
-    if (a) {
-      for (int r = 0; r < BADGE_PX; r++)
-        for (int c = 0; c < BADGE_PX; c++) {
-          uint8_t v = a->idx[r * BADGE_PX + c];
-          if (v == 0xFF) continue;
-          // 3x, so it reads as a prize rather than a list entry
-          gfx->fillRect(CX - BADGE_PX * 3 / 2 + c * 3, by - BADGE_PX * 3 / 2 + r * 3,
-                        3, 3, a->pal[v]);
-        }
-    } else {
-      // This region has no badge art. Say so with a plain medal in the leader's
-      // type colour rather than borrowing another region's badge.
+    if (btlHard) drawHardHalo(CX, by, 62);
+    if (!drawBadgeAt(btlRegion, (uint8_t)btlTrainer, CX, by, 3)) {
+      // unreachable while the static_asserts on badgeArtFor() hold; a plain
+      // medal in the trainer's type colour rather than someone else's badge
       const Trainer &tr = TRAINER_SETS[btlRegion % GYM_REGIONS].list[btlTrainer];
       gfx->fillCircle(CX, by, 26, typeColor(tr.type));
       gfx->drawCircle(CX, by, 26, UI_INK);
-      char n[4];
-      snprintf(n, sizeof(n), "%u", (unsigned)(btlTrainer + 1));
-      gfx->setTextSize(3);
-      gfx->setTextColor(typeColorIsLight(tr.type) ? UI_INK : UI_WHITE);
-      gfx->setCursor(CX - (int)strlen(n) * 9, by - 11);
-      gfx->print(n);
     }
     if (btlNewBadge) {
       gfx->setTextColor(UI_BAR_OK);
@@ -4039,7 +3771,7 @@ void renderWin() {
     }
   }
   if (btlKind != BK_REMATCH) {
-    snprintf(l, sizeof(l), T(S_BADGES_FMT), pet.badgeCountIn(btlRegion, btlHard));
+    snprintf(l, sizeof(l), T(S_BADGES_FMT), pet.badgeCountIn(btlRegion, btlHard), (unsigned)TRAINER_COUNT);
     gfx->setTextColor(UI_INK);
     gfx->setTextSize(2);
     gfx->setCursor(CX - (int)strlen(l) * 6, 316);
@@ -4360,6 +4092,23 @@ void battleTap(int16_t x, int16_t y) {
 // Page 1: who you are -- avatar, badges, totals. Tap the avatar to cycle it;
 // the four sprites are hand-drawn (see species.h) because SpriteCollab has no
 // trainer art and ripped sprites would be unlicensed.
+// Where ladder slot i sits on the player card. Gyms: one row of eight, 50 px
+// apart (the halo is 25, so two hard-mode halos just touch). Elite 4 + champion:
+// a row of five under it, the champion a further 10 px off to the right.
+#define PLAYER_GYM_Y 192
+#define PLAYER_E4_Y 248
+#define PLAYER_HALO_R 25
+void playerBadgeXY(int i, int *x, int *y) {
+  if (i < TRAINER_GYMS) {
+    *x = CX - (TRAINER_GYMS - 1) * 25 + i * 50;
+    *y = PLAYER_GYM_Y;
+  } else {
+    int k = i - TRAINER_GYMS;               // 0..3 Elite 4, 4 champion
+    *x = CX - 2 * 52 - 5 + k * 52 + (k == 4 ? 10 : 0);
+    *y = PLAYER_E4_Y;
+  }
+}
+
 static void renderPlayerBadges() {
   // the player's name if they have set one, the generic title if not; either
   // way tapping it opens the keyboard
@@ -4393,37 +4142,20 @@ static void renderPlayerBadges() {
     gfx->print(T(S_AVATAR_HINT));
   }
 
-  // The real badges, 2x4. Unearned ones draw as a faint outline so the shape
-  // of what is missing is still visible.
-  for (int i = 0; i < TRAINER_GYMS; i++) {
-    int bx = 140 + (i % 4) * 62, by = 188 + (i / 4) * 62;
+  // The whole ladder: the eight gym badges in one row, then the four Elite 4
+  // emblems and the champion's crest under them, set a little apart. Unearned
+  // ones draw as a faint outline of their own shape, so what is missing is
+  // still visible; a hard-mode win wears the golden halo.
+  for (int i = 0; i < TRAINER_COUNT; i++) {
+    int bx, by;
+    playerBadgeXY(i, &bx, &by);
     bool got = pet.hasBadge(playerBadgeRegion, i, false);
-    bool hard = pet.hasBadge(playerBadgeRegion, i, true);
-    if (hard) {
-      // Beaten on hard: a golden halo. Concentric rings, not a filled disc --
-      // a disc sat behind the art and read as a gold coin rather than a glow.
-      gfx->drawCircle(bx, by, 25, 0xFDE0);
-      gfx->drawCircle(bx, by, 24, 0xFEA0);
-      gfx->drawCircle(bx, by, 23, 0xFF60);
-      gfx->drawCircle(bx, by, 22, 0xFEA0);
-      gfx->drawCircle(bx, by, 21, 0xFDE0);
+    if (pet.hasBadge(playerBadgeRegion, i, true)) drawHardHalo(bx, by, PLAYER_HALO_R);
+    if (!drawBadgeAt(playerBadgeRegion, (uint8_t)i, bx, by, 1, !got, UI_TRACK)) {
+      // unreachable while badgeArtFor()'s static_asserts hold
+      if (got) gfx->fillCircle(bx, by, 14, typeColor(TRAINER_SETS[playerBadgeRegion].list[i].type));
+      gfx->drawCircle(bx, by, 14, got ? UI_INK : UI_TRACK);
     }
-    if (!got) {
-      gfx->drawCircle(bx, by, 20, UI_TRACK);
-      continue;
-    }
-    const BadgeArt *a = badgeArtFor(playerBadgeRegion, i);
-    if (!a) {                 // no art for this region: a filled disc, won is won
-      gfx->fillCircle(bx, by, 14, typeColor(TRAINER_SETS[playerBadgeRegion % GYM_REGIONS].list[i].type));
-      gfx->drawCircle(bx, by, 14, UI_INK);
-      continue;
-    }
-    for (int r = 0; r < BADGE_PX; r++)
-      for (int c = 0; c < BADGE_PX; c++) {
-        uint8_t v = a->idx[r * BADGE_PX + c];
-        if (v == 0xFF) continue;
-        gfx->fillRect(bx - BADGE_PX / 2 + c, by - BADGE_PX / 2 + r, 1, 1, a->pal[v]);
-      }
   }
   char l[32];
   gfx->setTextColor(UI_INK);
@@ -4489,129 +4221,6 @@ void renderPlayer() {
   gfx->setTextSize(2);
   gfx->setCursor(CX - strlen(T(S_BACK)) * 6, 392);
   gfx->print(T(S_BACK));
-  gfx->flush();
-}
-
-// ---------- reaction test (trains SPEED) ----------
-// The third training verb. The bag is a masher and the ball is a juggler, so
-// this one is a reaction: a target appears somewhere on the panel and you tap
-// it before it expires. The window shrinks as you go, which is what makes it
-// read as speed rather than as endurance.
-#define SPD_MS 15000UL       // session length
-#define SPD_LIFE0 1100       // first target's window, ms
-#define SPD_LIFE_MIN 380
-#define SPD_R 46             // target radius
-
-void spdSpawn() {
-  // Keep the whole target inside the bezel: pick an angle and a radius that
-  // leave SPD_R of margin, rather than a square that clips at the corners.
-  int ang = random(360);
-  int rad = random(150);
-  float a = ang * 3.14159f / 180.0f;
-  spdX = CX + (int)(cosf(a) * rad);
-  spdY = CY + (int)(sinf(a) * rad);
-  spdBorn = millis();
-}
-
-void startSpeedGame() {
-  if (pet.isEgg() || pet.sleeping || pet.ceremony) return;
-  spdOpen = true;
-  spdUntil = millis() + SPD_MS;
-  spdOverUntil = 0;
-  spdHits = 0;
-  spdMisses = 0;
-  spdGain = 0;
-  spdNewHi = false;
-  spdSpawn();
-}
-
-static uint16_t spdLife() {
-  int life = SPD_LIFE0 - spdHits * 32;
-  return life < SPD_LIFE_MIN ? SPD_LIFE_MIN : life;
-}
-
-void spdTap(int16_t x, int16_t y) {
-  if (spdOverUntil) return;
-  int dx = x - spdX, dy = y - spdY;
-  if (dx * dx + dy * dy <= (SPD_R + 14) * (SPD_R + 14)) {
-    spdHits++;
-    sfxPlay(SFX_TAP);
-    spdSpawn();
-  }
-}
-
-void renderSpeed() {
-  uint32_t now = millis();
-  drawGameScene();
-  bool night = sceneHour() < 6 || sceneHour() >= 20;
-  uint16_t ink = night ? UI_INK_NIGHT : UI_INK;
-
-  if (spdOverUntil) {
-    if (now > spdOverUntil) { spdOpen = false; return; }
-    char b[24];
-    snprintf(b, sizeof(b), T(S_SCORE_FMT), spdHits);
-    gfx->setTextColor(ink);
-    gfx->setTextSize(4);
-    gfx->setCursor(CX - strlen(b) * 12, 150);
-    gfx->print(b);
-    char g[20];
-    snprintf(g, sizeof(g), T(S_SPD_GAIN_FMT), spdGain);
-    gfx->setTextColor(UI_BAR_WARN);
-    gfx->setTextSize(3);
-    gfx->setCursor(CX - strlen(g) * 9, 210);
-    gfx->print(g);
-    gfx->setTextSize(2);
-    if (spdNewHi && spdHits > 0) {
-      gfx->setTextColor(UI_BAR_WARN);
-      gfx->setCursor(CX - strlen(T(S_NEW_RECORD)) * 6, 256);
-      gfx->print(T(S_NEW_RECORD));
-    } else {
-      char r[20];
-      snprintf(r, sizeof(r), T(S_RECORD_FMT), pet.spdHi);
-      gfx->setTextColor(ink);
-      gfx->setCursor(CX - strlen(r) * 6, 256);
-      gfx->print(r);
-    }
-    gfx->flush();
-    return;
-  }
-
-  // session over?
-  if (now >= spdUntil) {
-    spdNewHi = (spdHits > pet.spdHi);
-    spdGain = pet.trainSpeed(spdHits);
-    sfxPlay(spdNewHi ? SFX_MEDAL : SFX_PLAY);
-    spdOverUntil = now + 3500;
-    gfx->flush();
-    return;
-  }
-  // target expired?
-  if (now - spdBorn > spdLife()) {
-    spdMisses++;
-    spdSpawn();
-  }
-
-  // the target, shrinking as its window runs out so the urgency is visible
-  uint32_t age = now - spdBorn;
-  int life = spdLife();
-  int r = SPD_R - (int)((uint32_t)SPD_R * age / (life ? life : 1) / 2);
-  if (r < 8) r = 8;
-  gfx->fillCircle(spdX, spdY, r, UI_BAR_BAD);
-  gfx->fillCircle(spdX, spdY, r * 2 / 3, UI_WHITE);
-  gfx->fillCircle(spdX, spdY, r / 3, UI_BAR_BAD);
-
-  char b[12];
-  snprintf(b, sizeof(b), "%u", spdHits);
-  gfx->setTextColor(ink);
-  gfx->setTextSize(4);
-  gfx->setCursor(CX - strlen(b) * 12, 30);
-  gfx->print(b);
-  // seconds left
-  uint32_t left = (spdUntil > now) ? (spdUntil - now + 999) / 1000 : 0;
-  snprintf(b, sizeof(b), "%us", (unsigned)left);
-  gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(b) * 6, 76);
-  gfx->print(b);
   gfx->flush();
 }
 
@@ -4953,6 +4562,8 @@ void lanTap(int16_t x, int16_t y) {
 }
 
 // ---------- gym list ----------
+// centre of a ladder row's badge, inside the row's right end (rows: 70..396)
+#define GYM_BADGE_X 372
 void renderGyms() {
   gfx->fillScreen(RGB565_BLACK);
   gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
@@ -5004,13 +4615,11 @@ void renderGyms() {
     char lv[16];
     snprintf(lv, sizeof(lv), "Lv.%u x%u", top, cnt);
     gfx->setTextColor(done ? UI_BAR_OK : (open_ ? UI_INK : UI_TRACK));
-    gfx->setCursor(384 - (int)strlen(lv) * 6, y + 28);
+    gfx->setCursor(GYM_BADGE_X - 22 - (int)strlen(lv) * 6, y + 28);
     gfx->print(lv);
-    if (done) {
-      gfx->setTextColor(UI_BAR_OK);
-      gfx->setCursor(370, y + 8);
-      gfx->print("*");
-    }
+    // The badge this row is worth, at 1x on its right end: in full once beaten
+    // (on the difficulty showing), a faint outline of its shape until then.
+    drawBadgeAt(gymRegion % GYM_REGIONS, idx, GYM_BADGE_X, y + 22, 1, !done, UI_TRACK);
   }
   uint8_t pages = (TRAINER_COUNT + GYM_ROWS - 1) / GYM_ROWS;
   for (uint8_t i = 0; i < pages; i++) {
@@ -5104,6 +4713,9 @@ static int eggRegionTap(int16_t x, int16_t y) {
 // top of its label -- invisible until a region chooser had more than one page,
 // so it appeared the moment Sinnoh made GYM_REGIONS 4 and went unnoticed
 // because swipe_test drives the paging and never looks at the pixels.
+// the gym chooser's mini badge strip: 16 px badges, 18 apart, under the name
+#define RPICK_STRIP_X(k) (RPICK_X + 26 + (k) * 18)
+#define RPICK_STRIP_DY 50
 #define RPICK_DOTS_Y 325
 #define RPICK_DOT_R 5
 // Guards, not decoration: both of these are the collision that shipped, and a
@@ -5200,7 +4812,7 @@ static void renderRegionPick(uint8_t mode) {
     if (!open)
       snprintf(sub, sizeof(sub), "%s", T(S_NEED_PACK));
     else if (mode == RPICK_FOR_GYMS)
-      snprintf(sub, sizeof(sub), T(S_BADGES_FMT), pet.badgeCountIn(i, gymHard));
+      snprintf(sub, sizeof(sub), T(S_BADGES_FMT), pet.badgeCountIn(i, gymHard), (unsigned)TRAINER_COUNT);
     else if (mode == RPICK_FOR_DEX)
       snprintf(sub, sizeof(sub), "%u/%u",
                pet.registeredCountIn(REGIONS[i].lo, REGIONS[i].hi),
@@ -5211,6 +4823,13 @@ static void renderRegionPick(uint8_t mode) {
       gfx->setCursor(RPICK_X + RPICK_W - 18 - (int)strlen(sub) * 12, y + 22);
       gfx->print(sub);
     }
+    // The ladder at a glance under the name: all thirteen at half size, in
+    // colour once won on the difficulty the chooser is counting, a grey
+    // silhouette until then.
+    if (forGyms)
+      for (uint8_t k = 0; k < TRAINER_COUNT; k++)
+        drawBadgeAt(i, k, RPICK_STRIP_X(k), y + RPICK_STRIP_DY, 0,
+                    !pet.hasBadge(i, k, gymHard), UI_TRACK);
   }
   if (forGyms) {
     gfx->fillRoundRect(LANBTN_X, LANBTN_Y, LANBTN_W, LANBTN_H, 11, UI_BG_DAY);

@@ -148,6 +148,16 @@ public:
   // Reaction test: its own trainer, so the ball game can go back to being purely
   // about joy instead of doubling as a stat grind.
   uint8_t trainSpeed(uint16_t hits);
+  // The same three, with the stat gain read from an EFFECTIVE score while
+  // everything else -- the record, joy, weight, the heart, the task event --
+  // still reads the RAW count. The training games score crits, combos, gold
+  // targets and power-ups; feeding those into the record would change what
+  // strHi/spdHi/gameHi have always meant. The one-argument forms are
+  // (raw, raw). Gain = min(18, eff/4) for the bag, min(18, eff/2) for the
+  // other two, then the IV ceiling, exactly as before.
+  uint8_t playResult(uint8_t score, uint16_t eff);
+  uint8_t trainStrength(uint16_t hits, uint16_t eff);
+  uint8_t trainSpeed(uint16_t hits, uint16_t eff);
   // What beating a gym leader is worth. Random WHICH stat, but only among the
   // ones with room left -- a random grant that landed on an already-capped stat
   // would silently evaporate, which reads as a bug rather than as luck. Writes

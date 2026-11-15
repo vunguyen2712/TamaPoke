@@ -40,7 +40,13 @@ def _gym_regions():
     names = _re.findall(r'\{\s*TRAINERS_\w+,\s*"(\w+)"\s*\}', th)
     return [n.capitalize() for n in names]
 
-REGIONS = _gym_regions()
+# ...minus the ladders with no upstream sheet at all (Alola): their badges are
+# original art drawn by gen_badges_extra.py into badges_extra.h, which also
+# holds every region's Elite 4 / Champion emblems. Asking that script which
+# ones keeps the two from disagreeing.
+sys.path.insert(0, HERE)
+from gen_badges_extra import ORIGINAL_REGIONS  # noqa: E402
+REGIONS = [r for r in _gym_regions() if r.upper() not in ORIGINAL_REGIONS]
 
 NAMES = ['BOULDER', 'CASCADE', 'THUNDER', 'RAINBOW',
          'SOUL', 'MARSH', 'VOLCANO', 'EARTH']
