@@ -452,6 +452,52 @@ After any ending, a **new egg** appears.
   sent from the web installer is picked up **as it lands** — the region unlocks
   without a reboot.
 
+### The battle screen (v3.18)
+The fight is drawn over the foe's biome backdrop (day or night), framed like the
+handheld games:
+
+- **Title banner** at the top: a navy pill with diamond end caps naming the fight,
+  then which of the opponent's creatures is out of how many.
+
+  | Fight | Banner | Trim |
+  |---|---|---|
+  | Gym leader 1-8 | `GYM 3 1/3` | red (gold on HARD) |
+  | Elite 4 / champion | `ELITE 4 2/5` / `CHAMPION 1/6` | purple (gold on HARD) |
+  | Rematch | `REMATCH 1/6` | orange |
+  | Tower | `TOWER F7 2/3` (the floor being fought) | violet (gold for a smart-AI floor) |
+  | Weekly challenge | `CHALLENGE 1/3` | teal |
+  | LAN | `LAN 1/4` (the rival's squad) | blue |
+  | Wild | `WILD` | green |
+  | When it ends | `VICTORY` / `DEFEAT` | green / red |
+
+  A single-creature opponent shows no count. Text is large when it fits 156 px,
+  small otherwise.
+- **HP cards**: the foe's top-left, yours bottom-right. Name, `Lv`, an HP bar and
+  `current/max` for **both** sides. The bar is **green above 1/2**, **amber above
+  1/4**, **red at 1/4 and below**, and drains rather than snaps. Under each card,
+  a pill per **type** in the type's colour, and a purple pill for a **status**
+  (burn, poison...).
+- **Platforms**: each creature stands on a white elliptical platform with a soft
+  shadow -- the foe's centred at (334, 152) with radii 62 x 16 px, yours nearer and
+  bigger at (104, 232), radii 74 x 19. The move effects aim at the same stand points.
+- **Ground**: the backdrop fades into the bezel at the top and into the menu band
+  at the bottom. In an **arena fight** (gym, rematch, tower, challenge, LAN) a
+  perspective grid -- 13 lines to a vanishing point, 6 rungs crowding toward the
+  horizon -- is etched into the floor. Wild fights keep the bare scenery.
+- **Commands**, on a deep blue band under a red rule: **FIGHT** (red, full width),
+  **POKEMON** (orange, with how many of your squad can still fight, e.g. `2/3`)
+  and **RUN** (white). Same tap areas as before, every one at least 44 px tall.
+- **Moves**: four buttons in their **type's colour**: the name, the type, `POW n`
+  (or `STATUS`), and a yellow dot on a same-type (STAB) move. **BACK** is blue.
+- **Switching**: each creature with a small HP bar; the one already out is dark
+  blue, a fainted one greyed.
+- **Messages** sit in a framed box with a bobbing red arrow while a tap moves them
+  on. The frame turns green on a win and red on a loss. Lines are large when every
+  line fits (up to 3 lines of 25 characters), small otherwise.
+- **Winning a badge**: the badge (at 3x, with the gold halo on HARD) sits in a
+  white spotlight on a 12-ray sunburst, under a banner reading `You win!`, with
+  a green **NEW BADGE!** ribbon and a blue BACK button (a tap anywhere still leaves).
+
 ### Move effects (v3.16)
 Every move plays its own effect in its **type's colours**, with a pixel-art sprite
 per type: flames, water drops, leaves, ice shards, rocks, lightning, feathers,

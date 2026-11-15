@@ -439,6 +439,20 @@ static int regionPickTap(int16_t x, int16_t y, uint8_t mode);
 static void drawEggRegion();          // defined with the egg screen helpers
 static int eggRegionTap(int16_t x, int16_t y);
 static void drawBtlBack();
+// The battle screen's art lives in ui_battle.ino, which is concatenated after
+// this file; these are the pieces renderBattle()/renderWin() call.
+static void bbDrawGround();
+static void btlCard(const Combatant &c, uint8_t who, uint16_t shown);
+static void bbDrawBanner();
+static void bbDrawBand();
+static void bbDrawCommands();
+static void bbDrawMove(int i, uint8_t mv, int16_t dex);
+static void bbDrawSwitch(int i, const Combatant &m, bool usable, bool current);
+static void bbMsgBox(int x, int y, int w, int h, uint16_t tone, bool more);
+static void bbBanner(int x, int y, int w, int h, uint16_t trim, const char *t, uint8_t size);
+static void bbChunky(int x, int y, int w, int h, uint16_t face, uint16_t under, uint16_t hi);
+static void bbText(const char *s, int x, int y, uint8_t size, uint16_t col, int16_t shadow);
+static void bbWinBack(int y);
 static void btlLinkPoll();   // defined with the battle code, called from render()
 static void btlSwitchTo(uint8_t i);
 static void btlResolve(uint8_t yourMove);
@@ -635,6 +649,16 @@ uint8_t btlMenu = 0;
 #define BTL_HIT_MS 420
 char btlMsg[6][40];
 uint8_t btlMsgCount = 0;   // queued lines; a tap shows the next
+// Where the two creatures stand: the sprite's centre and the row its feet are
+// on. The platforms (ui_battle.ino) and the move effects' anchors (FX_CX/FX_CY/
+// FX_FEET in ui_movefx.ino) are DERIVED from these, so a creature, its
+// platform and the effects aimed at it cannot drift apart.
+#define BTL_YOU_X 104
+#define BTL_YOU_FEET 230
+#define BTL_FOE_X 334
+#define BTL_FOE_FEET 150
+// The scene (backdrop, creatures, effects) ends here; the menu band is below.
+#define BTL_SCENE_Y1 254
 #define BTL_CELL_W 160
 #define BTL_CELL_H 44
 #define BTL_GRID_X 69
@@ -3625,47 +3649,10 @@ static void btlResolve(uint8_t yourMove) {
   }
 }
 
-static void btlHpBar(int x, int y, int w, const Combatant &c, uint16_t shown) {
-  int fw = c.maxHp ? (w - 4) * shown / c.maxHp : 0;
-  uint16_t col = (shown * 2 > c.maxHp) ? UI_BAR_OK
-                 : (shown * 4 > c.maxHp) ? UI_BAR_WARN : UI_BAR_BAD;
-  gfx->fillRoundRect(x, y, w, 14, 4, UI_TRACK);
-  if (fw > 0) gfx->fillRoundRect(x + 2, y + 2, fw, 10, 3, col);
-  gfx->drawRoundRect(x, y, w, 14, 4, UI_INK);
-}
-
-static void btlSide(int tx, int ty, int sx, int sy, const Combatant &c, uint8_t who) {
-  // the scenes are busy, so the name and bar sit on their own plate rather
-  // than fighting the artwork for contrast
-  int ph = (who == 0) ? 54 : 40;
-  gfx->fillRoundRect(tx - 8, ty - 8, 158, ph, 8, UI_BG_DAY);
-  gfx->drawRoundRect(tx - 8, ty - 8, 158, ph, 8, UI_INK);
-  char l[28];
-  snprintf(l, sizeof(l), "%s Lv.%u", c.name, c.level);
-  gfx->setTextColor(UI_INK);
-  gfx->setTextSize(1);
-  gfx->setCursor(tx, ty);
-  gfx->print(l);
-  gfx->setTextColor(UI_BAR_WARN);
-  gfx->setCursor(tx, ty + 14);
-  gfx->print("HP");
-  btlHpBar(tx + 18, ty + 12, 122, c, btlHpShown[who]);
-  if (who == 0) {                 // your own numbers, as the games do
-    char hp[16];
-    snprintf(hp, sizeof(hp), "%u/%u", btlHpShown[who], c.maxHp);
-    gfx->setTextColor(UI_INK);
-    gfx->setCursor(tx + 140 - (int)strlen(hp) * 6, ty + 28);
-    gfx->print(hp);
-  }
-  if (c.ailment != AIL_NONE) {   // a status is the thing you most need to see
-    static const StrId AIL_STR[] = { S_AIL_PARA, S_AIL_PARA, S_AIL_BURN, S_AIL_POISON,
-                                     S_AIL_SLEEP, S_AIL_FREEZE, S_AIL_CONFUSE };
-    gfx->setTextColor(UI_BAR_BAD);
-    gfx->setCursor(tx + 18, ty + 28);
-    gfx->print(T(AIL_STR[c.ailment]));
-  }
-  // a platform under each creature, so they stand in the scene rather than
-  // floating over it
+// One side: its HP card (ui_battle.ino), then the creature on its platform.
+static void btlSide(const Combatant &c, uint8_t who) {
+  btlCard(c, who, btlHpShown[who]);
+  const int sx = who ? BTL_FOE_X : BTL_YOU_X, feet = who ? BTL_FOE_FEET : BTL_YOU_FEET;
   uint32_t now = millis();
   int ox = 0, oy = 0;
   bool flash = false;
@@ -3708,13 +3695,14 @@ static void btlSide(int tx, int ty, int sx, int sy, const Combatant &c, uint8_t 
     } else if (lunging && btlPmd[who].has(PMD_ATTACK)) {
       act = PMD_ATTACK; loop = false; t = now - btlLungeFrom[who];
     }
-    drawPmdActM(btlPmd[who], act, sx + 24 + ox, sy + 78 + oy, t, loop, false, 4);
+    drawPmdActM(btlPmd[who], act, sx + ox, feet + oy, t, loop, false, 4);
     return;
   }
   const uint8_t *th = thumbs.get(c.dex);
   if (!th) return;
   if (hurting) flash = ((btlHitUntil[who] - now) / 60) % 2 == 0;
-  drawThumb(th, sx + ox, sy + oy, 3, flash);
+  // the flat thumbnail is centred in an 80 px cell; its feet sit ~78 below
+  drawThumb(th, sx - 40 + ox, feet - 78 + oy, 3, flash);
 }
 
 // Bars drain rather than snap: a hit that removes half your health should be
@@ -3737,12 +3725,29 @@ static void btlEaseBars() {
 void renderWin() {
   const Trainer &t = BTL_TRAINERS[btlTrainer];
   gfx->fillScreen(RGB565_BLACK);
-  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  // a navy rim around the cream, the battle screen's frame
+  gfx->fillCircle(CX, CY, 231, 0x1928);
+  gfx->fillCircle(CX, CY, 224, UI_BG_DAY);
+  if (btlKind != BK_REMATCH) {
+    // a sunburst behind the badge: twelve rays, a triangle each
+    const int by = 190, R = 104;
+    for (int k = 0; k < 24; k += 2) {
+      float a0 = k * 0.2618f + 0.06f, a1 = (k + 1) * 0.2618f - 0.06f;
+      gfx->fillTriangle(CX, by, CX + (int)(R * cosf(a0)), by + (int)(R * sinf(a0)),
+                        CX + (int)(R * cosf(a1)), by + (int)(R * sinf(a1)), 0xFF15);
+    }
+    gfx->fillCircle(CX, by, 66, 0xFFFF);
+    gfx->drawCircle(CX, by, 66, 0xF6AD);
+    gfx->drawCircle(CX, by, 67, 0xF6AD);
+  }
 
-  gfx->setTextColor(UI_BAR_WARN);
-  gfx->setTextSize(3);
-  gfx->setCursor(CX - strlen(T(S_BTL_WIN)) * 9, 54);
-  gfx->print(T(S_BTL_WIN));
+  // the title on the battle screen's banner, in gold
+  {
+    const char *w = T(S_BTL_WIN);
+    uint8_t sz = strlen(w) * 18 <= 200 ? 3 : 2;
+    int bw = (int)strlen(w) * 6 * sz + 52;
+    bbBanner(CX - bw / 2, 38, bw, 36, btlHard ? 0xFE60 : 0xE8E4, w, sz);
+  }
 
   char l[40];
   snprintf(l, sizeof(l), T(S_BTL_BEAT), t.name);
@@ -3768,11 +3773,11 @@ void renderWin() {
       gfx->fillCircle(CX, by, 26, typeColor(tr.type));
       gfx->drawCircle(CX, by, 26, UI_INK);
     }
-    if (btlNewBadge) {
-      gfx->setTextColor(UI_BAR_OK);
-      gfx->setTextSize(2);
-      gfx->setCursor(CX - strlen(T(S_BTL_NEWBADGE)) * 6, 286);
-      gfx->print(T(S_BTL_NEWBADGE));
+    if (btlNewBadge) {   // a green ribbon under the burst
+      const char *nb = T(S_BTL_NEWBADGE);
+      int nw = (int)strlen(nb) * 12 + 28;
+      bbChunky(CX - nw / 2, 278, nw, 30, 0x3F2A, 0x2584, 0x9FB5);
+      bbText(nb, CX - (int)strlen(nb) * 6, 284, 2, 0xFFFF, 0x2584);
     }
   }
   if (btlKind != BK_REMATCH) {
@@ -3799,10 +3804,8 @@ void renderWin() {
     gfx->print(T(S_WIN_MAXED));
   }
 
-  gfx->setTextColor(UI_TRACK);
-  gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(T(S_BACK)) * 6, 380);
-  gfx->print(T(S_BACK));
+  // a tap anywhere leaves; BACK is drawn as the battle's own button
+  bbWinBack(370);
   gfx->flush();
 }
 
@@ -3811,15 +3814,17 @@ void renderBattle() {
   btlEaseBars();
   gfx->fillScreen(RGB565_BLACK);
   drawBattleBack();
-  // the lower band stays flat so the move grid and the HP text keep their
-  // contrast against it
-  gfx->fillRect(0, 254, 466, 212, UI_BG_DAY);
+  bbDrawGround();                         // vignette, arena grid, the two platforms
 
-  // x=82 not 58: at y=60 the round bezel starts around x=77, and a longer
-  // name like BLASTOISE was losing its first characters off the edge
-  btlSide(82, 82, 300, 40, btlFoe, 1);    // foe reads top-left, sprite top-right
-  btlSide(250, 190, 76, 168, btlYou, 0);  // you read bottom-right, sprite bottom-left
+  // foe reads top-left with its sprite top-right; you read bottom-right with
+  // your sprite bottom-left
+  btlSide(btlFoe, 1);
+  btlSide(btlYou, 0);
   btlFxDraw();                            // the moves themselves, over both
+  // The band goes on AFTER the creatures: one that faints sinks behind the
+  // menu instead of sliding down over its buttons.
+  bbDrawBand();
+  bbDrawBanner();
 
   // Waiting on the other device. Without this the screen is identical to the
   // one where it is your turn, so a tap that has been sent and a tap that was
@@ -3827,88 +3832,42 @@ void renderBattle() {
   bool lanWait = btlLink && !btlOver &&
                  (btlLinkHost ? (btlMyAct && !lan.hasPeerAct())
                               : (lan.state == LINK_WAITING));
+  const int BOX_H = BTL_CELL_H * 2 + 8;
   if (lanWait && !btlMsgCount) {
-    gfx->fillRoundRect(BTL_GRID_X, BTL_GRID_Y, 328, BTL_CELL_H * 2 + 8, 12, UI_WHITE);
-    gfx->drawRoundRect(BTL_GRID_X, BTL_GRID_Y, 328, BTL_CELL_H * 2 + 8, 12, UI_INK);
-    gfx->setTextColor(UI_TRACK);
-    gfx->setTextSize(1);
+    bbMsgBox(BTL_GRID_X, BTL_GRID_Y, 328, BOX_H, 0x3D7F, false);
     const char *w = T(S_LAN_WAITFOE);
-    gfx->setCursor(CX - (int)strlen(w) * 3, BTL_GRID_Y + 40);
-    gfx->print(w);
+    bbText(w, CX - (int)strlen(w) * 3, BTL_GRID_Y + 44, 1, 0x7BCF, -1);
   } else if (btlMsgCount) {            // narration takes over the menu area
-    gfx->fillRoundRect(BTL_GRID_X, BTL_GRID_Y, 328, BTL_CELL_H * 2 + 8, 12, UI_WHITE);
-    gfx->drawRoundRect(BTL_GRID_X, BTL_GRID_Y, 328, BTL_CELL_H * 2 + 8, 12, UI_INK);
-    gfx->setTextColor(UI_INK);
-    gfx->setTextSize(1);
-    for (uint8_t i = 0; i < btlMsgCount && i < 4; i++) {
-      gfx->setCursor(CX - (int)strlen(btlMsg[i]) * 3, BTL_GRID_Y + 14 + i * 18);
-      gfx->print(btlMsg[i]);
-    }
-    gfx->setTextColor(UI_TRACK);
-    gfx->setCursor(CX - 30, BTL_GRID_Y + 84);
-    gfx->print("tap...");
+    // at the end of a fight the frame says how it went
+    uint16_t tone = btlOver ? (btlWon ? 0x3F2A : 0xF0E4) : 0x5CBF;
+    bbMsgBox(BTL_GRID_X, BTL_GRID_Y, 328, BOX_H, tone, true);
+    uint8_t n = btlMsgCount < 4 ? btlMsgCount : 4;
+    // large text when every line fits the box, the small font otherwise: one
+    // size for the whole box, so the lines never look mismatched
+    uint8_t sz = n <= 3 ? 2 : 1;
+    for (uint8_t i = 0; i < n; i++)
+      if (strlen(btlMsg[i]) * 12 > 300) sz = 1;
+    int lh = sz == 2 ? 22 : 18;
+    int y0 = BTL_GRID_Y + BOX_H / 2 - (n * lh - (lh - 8 * sz)) / 2;
+    for (uint8_t i = 0; i < n; i++)
+      bbText(btlMsg[i], CX - (int)strlen(btlMsg[i]) * 3 * sz, y0 + i * lh, sz, UI_INK, -1);
   } else if (btlMenu == 0) {
     // FIGHT across the top, then POKEMON and RUN side by side. Three full-width
     // rows do not fit: the panel is round, and at that depth the chord is only
     // ~250 px. The lower two reuse the move grid's cells, so they inherit its
     // padded hit areas -- which is what made POKEMON hard to press before.
-    gfx->fillRoundRect(BTL_GRID_X, BTL_GRID_Y, 328, BTL_CELL_H, 10, UI_BG_DAY);
-    gfx->drawRoundRect(BTL_GRID_X, BTL_GRID_Y, 328, BTL_CELL_H, 10, UI_INK);
-    gfx->setTextColor(UI_INK);
-    gfx->setTextSize(2);
-    gfx->setCursor(CX - (int)strlen(T(S_FIGHT)) * 6, BTL_GRID_Y + 14);
-    gfx->print(T(S_FIGHT));
-    const char *low[2] = { T(S_BTL_SWITCH), T(S_BTL_RUN) };
-    for (int i = 0; i < 2; i++) {
-      int x = BTL_CELL_X(i + 2), y = BTL_CELL_Y(i + 2);
-      gfx->fillRoundRect(x, y, BTL_CELL_W, BTL_CELL_H, 10, UI_TRACK);
-      gfx->drawRoundRect(x, y, BTL_CELL_W, BTL_CELL_H, 10, UI_INK);
-      gfx->setTextColor(UI_INK);
-      gfx->setTextSize(2);
-      gfx->setCursor(x + (BTL_CELL_W - (int)strlen(low[i]) * 12) / 2, y + 14);
-      gfx->print(low[i]);
-    }
+    bbDrawCommands();
   } else if (btlMenu == 2) {
     drawBtlBack();
     // who to bring on instead; the current one and anything fainted is inert
     for (uint8_t i = 0; i < btlSquadN && i < 4; i++) {
-      int x = BTL_CELL_X(i), y = BTL_CELL_Y(i);
       const Combatant &m = (i == btlSquadAt) ? btlYou : btlSquad[i];
-      bool usable = (i != btlSquadAt) && !m.fainted();
-      gfx->fillRoundRect(x, y, BTL_CELL_W, BTL_CELL_H, 10, usable ? UI_BG_DAY : UI_TRACK);
-      gfx->drawRoundRect(x, y, BTL_CELL_W, BTL_CELL_H, 10, usable ? UI_INK : 0x8410);
-      gfx->setTextColor(usable ? UI_INK : 0x8410);
-      gfx->setTextSize(1);
-      gfx->setCursor(x + 10, y + 10);
-      gfx->print(m.name);
-      char hp[20];
-      snprintf(hp, sizeof(hp), "%u/%u", m.hp, m.maxHp);
-      gfx->setCursor(x + 10, y + 28);
-      gfx->print(hp);
+      bbDrawSwitch(i, m, (i != btlSquadAt) && !m.fainted(), i == btlSquadAt);
     }
   } else {
     drawBtlBack();
-    for (int i = 0; i < MOVE_SLOTS; i++) {
-      int x = BTL_CELL_X(i), y = BTL_CELL_Y(i);
-      uint8_t mv = btlYou.moves[i];
-      gfx->fillRoundRect(x, y, BTL_CELL_W, BTL_CELL_H, 10, mv ? UI_BG_DAY : UI_TRACK);
-      gfx->drawRoundRect(x, y, BTL_CELL_W, BTL_CELL_H, 10, UI_INK);
-      if (!mv) continue;
-      gfx->setTextColor(UI_INK);
-      gfx->setTextSize(1);
-      gfx->setCursor(x + 10, y + 12);
-      gfx->print(MOVE_TBL[mv].name);
-      // Same chip as the move list: in a fight the type IS the decision, and
-      // grey 6px text was the least visible thing on the busiest screen.
-      int cw = drawTypeChip(x + 10, y + 26, MOVE_TBL[mv].type);
-      if (hasStab(btlYou.dex, MOVE_TBL[mv].type) &&
-          MOVE_TBL[mv].cat != MC_STATUS) {
-        gfx->setTextSize(1);
-        gfx->setTextColor(DEX_TBL[btlYou.dex].accent);
-        gfx->setCursor(x + 10 + cw + 4, y + 30);
-        gfx->print("+");
-      }
-    }
+    // In a fight the type IS the decision, so each move wears its type's colour.
+    for (int i = 0; i < MOVE_SLOTS; i++) bbDrawMove(i, btlYou.moves[i], btlYou.dex);
   }
   gfx->flush();
 }
@@ -3975,14 +3934,8 @@ int btlCellIndexAt(int16_t x, int16_t y) {
 
 // The way out of the move and switch screens. Without it the only exits were
 // choosing something or leaving the fight entirely.
-static void drawBtlBack() {
-  gfx->fillRoundRect(BTL_BACK_X, BTL_BACK_Y, BTL_BACK_W, BTL_BACK_H, 11, UI_TRACK);
-  gfx->drawRoundRect(BTL_BACK_X, BTL_BACK_Y, BTL_BACK_W, BTL_BACK_H, 11, UI_INK);
-  gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(CX - (int)strlen(T(S_BACK)) * 6, BTL_BACK_Y + 14);
-  gfx->print(T(S_BACK));
-}
+static void bbDrawBack();
+static void drawBtlBack() { bbDrawBack(); }
 
 static bool btlBackTap(int16_t x, int16_t y) {
   if (x < BTL_BACK_X || x > BTL_BACK_X + BTL_BACK_W ||
