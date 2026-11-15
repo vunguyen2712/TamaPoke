@@ -736,14 +736,11 @@ struct Btn {
   int16_t cx, cy;
   const char *const *icon;
 };
-// Five across the arc: spacing tightened 62 -> 54 so the outer pair stays far
-// enough in to keep its old y. Lifting them instead would have run the row into
-// the ENE/HYG bars, which end at y=361 -- the buttons are 52 tall, so any centre
-// above 387 overlaps them.
 // Four, not five. The ball had its own icon here until it became DEFENCE's
 // trainer and moved into the training menu -- at which point tapping it just
 // opened the same menu the dumbbell does, two icons for one destination.
-// They sit on the panel's curve: y = 406 - dx^2/729.
+// (The flat need bars that once constrained their height are gone since v3.18:
+// the needs are arc gauges on the bezel, ui_home.ino.)
 #define BTN_COUNT 4
 // Referred to by NAME, never by literal index. Removing the ball icon shifted
 // every index by one and drawButtons() still had `i != 2` meaning LIGHT -- which
@@ -752,14 +749,27 @@ struct Btn {
 #define BTN_LIGHT 1
 #define BTN_BATH  2
 #define BTN_TRAIN 3
+// v3.18 HUD: the four sit in the pastel action band (ui_home.ino draws it),
+// 72 px apart with a label over each. Still on the curve -- the outer pair is
+// 14 px higher -- because a 56 px tile's rounded corner at (125, 396) is the
+// furthest it can sit from the centre and stay inside radius 232.
 Btn buttons[BTN_COUNT] = {
-  { 134, 393, SPR_ICON_FOOD },   // comer
-  { 200, 405, SPR_ICON_LIGHT },  // luz
-  { 266, 405, SPR_ICON_CLEAN },  // bano
-  { 332, 393, SPR_ICON_TRAIN },  // entrenar
+  { 125, 396, SPR_ICON_FOOD },   // comer
+  { 197, 410, SPR_ICON_LIGHT },  // luz
+  { 269, 410, SPR_ICON_CLEAN },  // bano
+  { 341, 396, SPR_ICON_TRAIN },  // entrenar
 };
-#define BTN_HALF 30  // boton de 60x60 -- mas grande y mas separado que antes
-#define BTN_HIT 40   // radio tactil (un poco mas generoso)
+#define BTN_HALF 28     // a 56x56 tile
+// The tap area is a COLUMN per button: BTN_HIT either side of its centre (so
+// the four columns tile the row with no overlap at 72 px apart) and from
+// BTN_HIT_TOP above the centre -- over the label -- to BTN_HIT below. A finger
+// that lands on the label or a few px off the tile still counts. uiButtonHit()
+// is the one answer; onTap and the overlap checks both ask it.
+#define BTN_HIT 36
+#define BTN_HIT_TOP 54
+// The action band: from here down is the HUD's pastel strip (ui_home.ino).
+// Weather particles stop at it (ui_weather.ino WX_BOTTOM).
+#define HUD_BAND_Y 338
 
 // grietas del huevo (pixeles 'k' sobre el sprite)
 static const uint8_t CRACK1[][2] = { {15,8},{16,9},{15,10} };
@@ -1592,6 +1602,19 @@ int uiSleepButton(int *cx, int *cy) {
   return BTN_LIGHT;
 }
 
+// A home button's tap column (see BTN_HIT). Inclusive bounds.
+void uiButtonHitRect(int i, int *x0, int *y0, int *x1, int *y1) {
+  if (i < 0 || i >= BTN_COUNT) return;
+  *x0 = buttons[i].cx - BTN_HIT; *x1 = buttons[i].cx + BTN_HIT - 1;
+  *y0 = buttons[i].cy - BTN_HIT_TOP; *y1 = buttons[i].cy + BTN_HIT;
+}
+bool uiButtonHit(int i, int x, int y) {
+  int x0, y0, x1, y1;
+  if (i < 0 || i >= BTN_COUNT) return false;
+  uiButtonHitRect(i, &x0, &y0, &x1, &y1);
+  return x >= x0 && x <= x1 && y >= y0 && y <= y1;
+}
+
 void uiButtonAt(int i, int *cx, int *cy, int *half) {
   if (i < 0 || i >= BTN_COUNT) return;
   if (cx) *cx = buttons[i].cx;
@@ -2148,8 +2171,7 @@ void onTap(int16_t x, int16_t y) {
     if (pet.wantFarewellButton()) { choiceKind = 2; choiceUntil = millis() + 12000; return; }
   }
   for (int i = 0; i < BTN_COUNT; i++) {
-    int dx = x - buttons[i].cx, dy = y - buttons[i].cy;
-    if (dx * dx + dy * dy <= BTN_HIT * BTN_HIT) {
+    if (uiButtonHit(i, x, y)) {
       if (uiButtonDisabled(i)) { sfxPlay(SFX_DENY); return; }
       sfxPlay(SFX_TAP);
       if (i == BTN_FOOD) feedMenuUntil = millis() + 6000;
@@ -2208,90 +2230,7 @@ static const uint16_t BIOME_SOIL[6] = {
   C565(0xe6, 0xee, 0xf5),  // 5 nieve
 };
 
-void drawClouds(uint32_t now, uint16_t col) {
-  for (int k = 0; k < 2; k++) {
-    int cx = (int)((now / 50 + k * 250) % 560) - 40;
-    int cy = 70 + k * 34;
-    gfx->fillCircle(cx, cy, 16, col);
-    gfx->fillCircle(cx + 18, cy + 3, 13, col);
-    gfx->fillCircle(cx - 15, cy + 4, 12, col);
-  }
-}
-
-void drawScene(uint8_t biome, uint32_t now, bool night) {
-  night = rankSceneNight(night);   // the player's scene theme (ui_rank.ino)
-  int h = sceneHour();
-  uint16_t top, bot;
-  if (night)            { top = C565(0x0c, 0x12, 0x24); bot = C565(0x1e, 0x26, 0x46); }
-  else if (h < 8)       { top = C565(0xd1, 0x6a, 0x86); bot = C565(0xf3, 0xb8, 0x7c); }  // amanecer
-  else if (h < 18)      { top = C565(0x8f, 0xc8, 0xea); bot = C565(0xdc, 0xee, 0xe6); }  // dia
-  else                  { top = C565(0xc7, 0x5a, 0x4a); bot = C565(0xf0, 0xae, 0x64); }  // atardecer
-  rankSceneSky(top, bot, night);
-
-  // cielo en bandas
-  for (int y = 0; y < HORIZON; y += 8)
-    gfx->fillRect(0, y, 466, 8, lerp565(top, bot, y, HORIZON));
-
-  // sol o luna
-  if (night) {
-    gfx->fillCircle(360, 78, 24, C565(0xe8, 0xee, 0xf5));
-    gfx->fillCircle(370, 72, 22, lerp565(top, bot, 78, HORIZON));  // creciente
-    for (auto &st : STARS) gfx->fillRect(st[0], st[1], 4, 4, UI_WHITE);
-  } else if (h < 18) {
-    gfx->fillCircle(360, 84, 26, h < 8 ? C565(0xff, 0xd9, 0x8a) : C565(0xff, 0xe7, 0x9f));
-    drawClouds(now, C565(0xff, 0xff, 0xff));
-  } else {
-    gfx->fillCircle(233, HORIZON - 6, 34, C565(0xff, 0xf1, 0xc8));  // sol poniente
-  }
-
-  // mar de la playa: una franja de agua sobre la arena
-  uint16_t soil = BIOME_SOIL[biome < 6 ? biome : 0];
-  if (night) soil = lerp565(soil, C565(0x16, 0x1c, 0x30), 9, 16);
-  if (biome == 1) {
-    uint16_t sea = night ? C565(0x1c, 0x34, 0x52) : C565(0x4f, 0x96, 0xc4);
-    gfx->fillRect(0, HORIZON - 26, 466, 26, sea);
-    for (int i = 0; i < 3; i++) {
-      int wy = HORIZON - 22 + i * 7;
-      uint16_t fc = night ? C565(0x3a, 0x58, 0x78) : C565(0xbf, 0xe6, 0xf5);
-      gfx->fillRect(60 + ((now / 60 + i * 30) % 60), wy, 26, 2, fc);
-      gfx->fillRect(300 - ((now / 60 + i * 20) % 60), wy, 26, 2, fc);
-    }
-  }
-
-  // suelo
-  gfx->fillRect(0, HORIZON, 466, 466 - HORIZON, soil);
-  uint16_t hill = lerp565(soil, night ? C565(0x0c, 0x12, 0x24) : C565(0xff, 0xff, 0xff), 3, 16);
-  gfx->fillRoundRect(-60, HORIZON - 14, 586, 60, 30, hill);
-
-  // detalles del bioma
-  uint16_t dk = lerp565(soil, C565(0x10, 0x18, 0x20), night ? 11 : 7, 16);
-  if (biome == 2) {  // bosque: coniferas en silueta
-    for (int tx : { 60, 150, 360, 416 }) {
-      gfx->fillTriangle(tx, HORIZON - 46, tx - 16, HORIZON, tx + 16, HORIZON, dk);
-      gfx->fillTriangle(tx, HORIZON - 60, tx - 12, HORIZON - 28, tx + 12, HORIZON - 28, dk);
-    }
-  } else if (biome == 3) {  // volcan: rocas y brasas
-    gfx->fillTriangle(70, HORIZON, 40, HORIZON + 30, 100, HORIZON + 30, dk);
-    gfx->fillTriangle(400, HORIZON + 4, 372, HORIZON + 30, 430, HORIZON + 30, dk);
-    if (!night)
-      for (int e = 0; e < 4; e++)
-        gfx->fillRect(120 + e * 70, HORIZON + 8 + (e % 2) * 6, 4, 4, C565(0xff, 0x9b, 0x3a));
-  } else if (biome == 4) {  // montana: cumbres al fondo
-    gfx->fillTriangle(140, HORIZON - 50, 60, HORIZON, 220, HORIZON, dk);
-    gfx->fillTriangle(330, HORIZON - 38, 250, HORIZON, 410, HORIZON, dk);
-  } else if (biome == 5 && !night) {  // nieve: copos cayendo
-    for (int f = 0; f < 10; f++) {
-      int fx = (f * 53 + now / 40) % 466;
-      int fy = (f * 90 + now / 18) % HORIZON;
-      gfx->fillRect(fx, fy, 3, 3, UI_WHITE);
-    }
-  } else if (biome == 0) {  // pradera: matas de hierba
-    for (int gx : { 80, 175, 300, 395 })
-      for (int b = -1; b <= 1; b++)
-        gfx->fillRect(gx + b * 5, HORIZON + 6, 2, 8 + (b == 0 ? 4 : 0), dk);
-  }
-  rankSceneExtras(now, night);
-}
+// drawScene() (the home scene, every biome and time of day) lives in ui_home.ino.
 
 // primera partida: elige inicial entre Bulbasaur / Charmander / Squirtle
 void renderStarterSelect() {
@@ -2511,17 +2450,14 @@ void render() {
       for (auto &c : CRACK2) gfx->fillRect(x + c[0] * s, y + c[1] * s, s, s, INK_K);
     if (pet.eggRarity() >= R_RARO) {
       const char *rar = (pet.eggRarity() == R_LEGENDARIO) ? T(S_EGG_LEGEND) : T(S_EGG_RARE);
-      gfx->setTextColor(pet.eggRarity() == R_LEGENDARIO ? UI_BAR_WARN : 0x4C98);
-      gfx->setTextSize(2);
-      gfx->setCursor(CX - strlen(rar) * 6, 316);
-      gfx->print(rar);
+      hudText(rar, CX, 312, pet.eggRarity() == R_LEGENDARIO ? UI_BAR_WARN : 0x4C98);
     }
     char reg[24];
     snprintf(reg, sizeof(reg), T(S_POKEDEX_FMT), pet.registeredCount(), DEX_COUNT);
-    gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
+    drawHudBand();   // the pastel strip the action buttons sit on (ui_home.ino)
     gfx->setTextColor(inkColor());
     gfx->setTextSize(2);
-    gfx->setCursor(CX - strlen(reg) * 6, 344);
+    gfx->setCursor(CX - strlen(reg) * 6, 348);
     gfx->print(reg);
 
     // Which generation this egg comes from. It lives HERE rather than in the
@@ -2535,13 +2471,14 @@ void render() {
     const char *base = pet.nick[0] ? pet.nick : d.name;
     snprintf(name, sizeof(name), T(S_NAME_FMT), pet.shiny ? "*" : "", base, pet.level());
     drawHeader(name, gNight ? UI_INK_NIGHT : d.accent, statusMsg());
-    drawStreakBadge();
     drawPet();
     drawBath();
     drawPoops();
-    // panel inferior: base limpia para barras y botones sobre el paisaje
-    gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
-    drawBars();
+    // the HUD over the scene (ui_home.ino): the four need gauges on the bezel,
+    // the bond/streak line, the action band and its buttons
+    drawHudBand();
+    drawNeedGauges();
+    drawInfoLine();
     drawButtons();
     drawCelebration();
     if (pet.wantEvolveButton()) drawEvolveButton();        // CTA rojo: evolucionar
@@ -2549,12 +2486,7 @@ void render() {
     else if (pet.wantFarewellButton()) drawFarewellButton();  // CTA dorado: despedida
   }
 
-  if (pet.sleeping) {
-    gfx->setTextColor(UI_INK_NIGHT);
-    gfx->setTextSize(3);
-    gfx->setCursor(320, 130);
-    gfx->print("Zz");
-  }
+  if (pet.sleeping) drawSleepZ(millis());   // rising Z's (ui_home.ino)
 
   // selector de comida
   if (feedMenuUntil) {
@@ -2823,20 +2755,6 @@ void clockTap(int16_t x, int16_t y) {
     }
   }
   if (y >= 340 && y <= 388 && x >= 133 && x <= 333) { applyClock(); return; }
-}
-
-// llama + numero de racha arriba a la izquierda
-void drawStreakBadge() {
-  if (pet.streak < 1) return;
-  int x = 26, y = 16;
-  gfx->fillTriangle(x + 8, y, x + 1, y + 17, x + 15, y + 17, UI_BAR_BAD);
-  gfx->fillTriangle(x + 8, y + 7, x + 4, y + 17, x + 12, y + 17, UI_BAR_WARN);
-  char s[6];
-  snprintf(s, sizeof(s), "%u", pet.streak);
-  gfx->setTextColor(inkColor());
-  gfx->setTextSize(2);
-  gfx->setCursor(x + 22, y + 2);
-  gfx->print(s);
 }
 
 // banner temporal: medalla nueva o hito de racha
@@ -4623,7 +4541,7 @@ static void drawEggRegion() {
   gfx->setTextSize(2);
   gfx->setCursor(EGGREG_X + (EGGREG_W - (int)strlen(l) * 12) / 2, EGGREG_Y + 9);
   gfx->print(l);
-  gfx->setTextColor(UI_TRACK);
+  gfx->setTextColor(gNight ? C565(0x8a, 0x92, 0xbc) : C565(0x84, 0x7a, 0xa4));   // muted, on the HUD band
   gfx->setTextSize(1);
   gfx->setCursor(CX - (int)strlen(T(S_EGG_REGION)) * 3, EGGREG_Y + EGGREG_H + 6);
   gfx->print(T(S_EGG_REGION));
@@ -5489,41 +5407,6 @@ void galleryTap(int16_t x, int16_t y) {
   galleryPmd.load(dex, pet.isShinyRegistered(dex));
 }
 
-void drawBattery() {
-  int pc = batPercent();
-  if (pc < 0) return;  // sin bateria conectada
-  int x = CX - 14, y = 12, w = 24, h = 11;
-  bool charging = batCharging();
-  uint16_t col = charging ? UI_BAR_OK
-                 : (pc >= 40) ? inkColor()
-                 : (pc >= 15) ? UI_BAR_WARN
-                              : UI_BAR_BAD;
-  gfx->drawRoundRect(x, y, w, h, 2, col);
-  gfx->fillRect(x + w, y + 3, 3, 5, col);  // borne
-  if (charging) {
-    // rayo de carga (zigzag) en vez de la barra de nivel
-    uint16_t bolt = C565(0xff, 0xd9, 0x4a);
-    int bx = x + w / 2;
-    gfx->fillTriangle(bx + 3, y + 1, bx - 4, y + 6, bx + 1, y + 6, bolt);
-    gfx->fillTriangle(bx - 1, y + 5, bx + 4, y + 5, bx - 3, y + 10, bolt);
-  } else {
-    int fw = (w - 4) * pc / 100;
-    if (fw > 0) gfx->fillRect(x + 2, y + 2, fw, h - 4, col);
-  }
-}
-
-void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
-  drawBattery();
-  gfx->setTextColor(nameColor);
-  gfx->setTextSize(3);
-  gfx->setCursor(CX - strlen(name) * 9, 52);
-  gfx->print(name);
-  gfx->setTextColor(inkColor());
-  gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(msg) * 6, 90);
-  gfx->print(msg);
-}
-
 // animacion de la ceremonia (10s): despedida = reverencia con corazones y se
 // aleja caminando; escapada = se asusta y sale corriendo. Sustituye al idle.
 void drawCeremony() {
@@ -6025,35 +5908,6 @@ void overlayMouth(const Species &sp, int x, int y, int s, bool open) {
 void drawPoops() {
   for (int i = 0; i < pet.poops; i++) {
     drawMap(SPR_POOP, 32, 36 + i * 46, 244, 2, false);
-  }
-}
-
-void drawBars() {
-  drawBar(78, 318, T(S_BAR_FOOD), pet.fullness);
-  drawBar(244, 318, T(S_BAR_JOY), pet.joy);
-  drawBar(78, 346, T(S_BAR_ENE), pet.energy);
-  drawBar(244, 346, T(S_BAR_HYG), pet.hygiene);
-}
-
-void drawBar(int x, int y, const char *label, uint8_t val) {
-  gfx->setTextColor(inkColor());
-  gfx->setTextSize(2);
-  gfx->setCursor(x, y);
-  gfx->print(label);
-  int bx = x + 48, bw = 100, bh = 15;  // +48: deja sitio a etiquetas de 4 letras (EN)
-  uint16_t fill = (val >= 50) ? UI_BAR_OK : (val >= 25) ? UI_BAR_WARN : UI_BAR_BAD;
-  gfx->fillRoundRect(bx, y, bw, bh, 4, UI_TRACK);
-  int fw = (bw - 4) * val / 100;
-  if (fw > 0) gfx->fillRoundRect(bx + 2, y + 2, fw, bh - 4, 3, fill);
-}
-
-void drawButtons() {
-  for (int i = 0; i < BTN_COUNT; i++) {
-    bool off = uiButtonDisabled(i);   // durmiendo solo funciona LUZ
-    int bx = buttons[i].cx - BTN_HALF, by = buttons[i].cy - BTN_HALF;
-    if (!pet.sleeping) gfx->fillRoundRect(bx, by, 2 * BTN_HALF, 2 * BTN_HALF, 14, UI_WHITE);
-    gfx->drawRoundRect(bx, by, 2 * BTN_HALF, 2 * BTN_HALF, 14, inkColor());
-    if (!off) drawMap(buttons[i].icon, 16, buttons[i].cx - 16, buttons[i].cy - 16, 2, false);
   }
 }
 

@@ -58,7 +58,7 @@ CORE=("$ROOT/gbsynth.cpp" "$ROOT/pet.cpp" "$ROOT/i18n.cpp" "$ROOT/party.cpp" "$R
 FLAGS=(-std=c++17 -O1 -w -I"$EMU" -I"$ROOT" -DSPRITE_DIR="\"$ROOT/tools/sdcard/mons\"")
 
 # these drive setup()/loop()/render(), so they need the sketch itself
-needs_sketch() { case "$1" in arcade_ui_test|badge_region_test|badge_art_ui_test|movefx_ui_test|wildfight_ui_test|catchanim_ui_test|wildalert_ui_test|chain_ui_test|rank_ui_test|challenge_ui_test|weather_ui_test|habitat_ui_test|persona_ui_test|friends_ui_test|hub_ui_test|wild_ui_test|tasks_ui_test|tower_ui_test|rematch_ui_test|daycare_ui_test|bag_ui_test|friend_test|touch_test|flush_test|joy_test|anim_test|swipe_test|lan_test|console_test|hit_test|starter_test|release_test|training_ui_test|battle_ui_test) return 0;; *) return 1;; esac; }
+needs_sketch() { case "$1" in arcade_ui_test|badge_region_test|badge_art_ui_test|movefx_ui_test|wildfight_ui_test|catchanim_ui_test|wildalert_ui_test|chain_ui_test|rank_ui_test|challenge_ui_test|weather_ui_test|habitat_ui_test|persona_ui_test|friends_ui_test|hub_ui_test|wild_ui_test|tasks_ui_test|tower_ui_test|rematch_ui_test|daycare_ui_test|bag_ui_test|friend_test|touch_test|flush_test|joy_test|anim_test|swipe_test|lan_test|console_test|hit_test|starter_test|release_test|training_ui_test|battle_ui_test|main_ui_test) return 0;; *) return 1;; esac; }
 
 # and these are standalone: gbsynth.cpp has no Arduino dependency at all, which
 # is the point of it -- linking the game core in would only demand stubs for

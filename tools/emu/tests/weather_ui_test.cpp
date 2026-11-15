@@ -58,6 +58,7 @@ static const char *WXN[WX_COUNT] = { "CLEAR", "SUNNY", "RAIN", "SNOW", "FOG", "W
 
 // Draw the scene, snapshot it, draw the overlay on top, and count what changed:
 // anywhere, outside the round panel, under the bottom panel, on the header text.
+int hudBandTop();
 struct Diff { int any, offPanel, underPanel, onHeader; };
 static Diff overlayDiff() {
   uint32_t now = millis();
@@ -72,7 +73,7 @@ static Diff overlayDiff() {
       d.any++;
       long dx = x - 233, dy = y - 233;
       if (dx * dx + dy * dy >= 233L * 233L) d.offPanel++;
-      if (y >= 312) d.underPanel++;
+      if (y >= hudBandTop()) d.underPanel++;   // the HUD's action band (ui_home.ino)
       if (y >= 52 && y < 52 + 24 && x >= 233 - 120 && x <= 233 + 120) d.onHeader++;   // the name line
     }
   return d;
