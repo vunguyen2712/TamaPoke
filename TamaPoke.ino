@@ -47,7 +47,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "3.17"
+#define FW_VERSION "3.18"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -128,6 +128,8 @@ bool daycareOpen = false;
 bool bagOpen = false;
 bool challengeOpen = false;
 bool friendsOpen = false;
+bool arcadeOpen = false;   // the ARCADE (ui_arcade.ino), from the hub's second page
+void arcadeTouchPeek(bool pressed, int16_t x, int16_t y);   // ui_arcade.ino: BERRY CATCH's drag
 uint8_t hubPage = 0;   // one page today; a seventh row pages instead of shrinking
 // Shared look of every Adventure screen (helpers in ui_hub.ino).
 #define FEAT_ROW_X 70
@@ -245,6 +247,7 @@ enum : uint8_t {
   SCR_HUB, SCR_WILD, SCR_TASKS, SCR_TOWER, SCR_DAYCARE, SCR_BAG,
   SCR_CHALLENGE, SCR_FRIENDS,
   SCR_HABITAT,   // the Pokedex habitat list (ui_habitat.ino), a sub-screen of the gallery
+  SCR_ARCADE,    // the arcade games and their picker (ui_arcade.ino)
   SCR_MAIN, SCR_COUNT
 };
 extern const char *const SCREEN_NAME[SCR_COUNT];   // const is internal linkage in C++
@@ -273,6 +276,7 @@ const char *const SCREEN_NAME[SCR_COUNT] = {
   "hub", "wild", "tasks", "tower", "daycare", "bag",
   "challenge", "friends",
   "habitat",
+  "arcade",
   "main"
 };
 
@@ -435,6 +439,20 @@ static int regionPickTap(int16_t x, int16_t y, uint8_t mode);
 static void drawEggRegion();          // defined with the egg screen helpers
 static int eggRegionTap(int16_t x, int16_t y);
 static void drawBtlBack();
+// The battle screen's art lives in ui_battle.ino, which is concatenated after
+// this file; these are the pieces renderBattle()/renderWin() call.
+static void bbDrawGround();
+static void btlCard(const Combatant &c, uint8_t who, uint16_t shown);
+static void bbDrawBanner();
+static void bbDrawBand();
+static void bbDrawCommands();
+static void bbDrawMove(int i, uint8_t mv, int16_t dex);
+static void bbDrawSwitch(int i, const Combatant &m, bool usable, bool current);
+static void bbMsgBox(int x, int y, int w, int h, uint16_t tone, bool more);
+static void bbBanner(int x, int y, int w, int h, uint16_t trim, const char *t, uint8_t size);
+static void bbChunky(int x, int y, int w, int h, uint16_t face, uint16_t under, uint16_t hi);
+static void bbText(const char *s, int x, int y, uint8_t size, uint16_t col, int16_t shadow);
+static void bbWinBack(int y);
 static void btlLinkPoll();   // defined with the battle code, called from render()
 static void btlSwitchTo(uint8_t i);
 static void btlResolve(uint8_t yourMove);
@@ -631,6 +649,16 @@ uint8_t btlMenu = 0;
 #define BTL_HIT_MS 420
 char btlMsg[6][40];
 uint8_t btlMsgCount = 0;   // queued lines; a tap shows the next
+// Where the two creatures stand: the sprite's centre and the row its feet are
+// on. The platforms (ui_battle.ino) and the move effects' anchors (FX_CX/FX_CY/
+// FX_FEET in ui_movefx.ino) are DERIVED from these, so a creature, its
+// platform and the effects aimed at it cannot drift apart.
+#define BTL_YOU_X 104
+#define BTL_YOU_FEET 230
+#define BTL_FOE_X 334
+#define BTL_FOE_FEET 150
+// The scene (backdrop, creatures, effects) ends here; the menu band is below.
+#define BTL_SCENE_Y1 254
 #define BTL_CELL_W 160
 #define BTL_CELL_H 44
 #define BTL_GRID_X 69
@@ -708,14 +736,11 @@ struct Btn {
   int16_t cx, cy;
   const char *const *icon;
 };
-// Five across the arc: spacing tightened 62 -> 54 so the outer pair stays far
-// enough in to keep its old y. Lifting them instead would have run the row into
-// the ENE/HYG bars, which end at y=361 -- the buttons are 52 tall, so any centre
-// above 387 overlaps them.
 // Four, not five. The ball had its own icon here until it became DEFENCE's
 // trainer and moved into the training menu -- at which point tapping it just
 // opened the same menu the dumbbell does, two icons for one destination.
-// They sit on the panel's curve: y = 406 - dx^2/729.
+// (The flat need bars that once constrained their height are gone since v3.18:
+// the needs are arc gauges on the bezel, ui_home.ino.)
 #define BTN_COUNT 4
 // Referred to by NAME, never by literal index. Removing the ball icon shifted
 // every index by one and drawButtons() still had `i != 2` meaning LIGHT -- which
@@ -724,14 +749,27 @@ struct Btn {
 #define BTN_LIGHT 1
 #define BTN_BATH  2
 #define BTN_TRAIN 3
+// v3.18 HUD: the four sit in the pastel action band (ui_home.ino draws it),
+// 72 px apart with a label over each. Still on the curve -- the outer pair is
+// 14 px higher -- because a 56 px tile's rounded corner at (125, 396) is the
+// furthest it can sit from the centre and stay inside radius 232.
 Btn buttons[BTN_COUNT] = {
-  { 134, 393, SPR_ICON_FOOD },   // comer
-  { 200, 405, SPR_ICON_LIGHT },  // luz
-  { 266, 405, SPR_ICON_CLEAN },  // bano
-  { 332, 393, SPR_ICON_TRAIN },  // entrenar
+  { 125, 396, SPR_ICON_FOOD },   // comer
+  { 197, 410, SPR_ICON_LIGHT },  // luz
+  { 269, 410, SPR_ICON_CLEAN },  // bano
+  { 341, 396, SPR_ICON_TRAIN },  // entrenar
 };
-#define BTN_HALF 30  // boton de 60x60 -- mas grande y mas separado que antes
-#define BTN_HIT 40   // radio tactil (un poco mas generoso)
+#define BTN_HALF 28     // a 56x56 tile
+// The tap area is a COLUMN per button: BTN_HIT either side of its centre (so
+// the four columns tile the row with no overlap at 72 px apart) and from
+// BTN_HIT_TOP above the centre -- over the label -- to BTN_HIT below. A finger
+// that lands on the label or a few px off the tile still counts. uiButtonHit()
+// is the one answer; onTap and the overlap checks both ask it.
+#define BTN_HIT 36
+#define BTN_HIT_TOP 54
+// The action band: from here down is the HUD's pastel strip (ui_home.ino).
+// Weather particles stop at it (ui_weather.ino WX_BOTTOM).
+#define HUD_BAND_Y 338
 
 // grietas del huevo (pixeles 'k' sobre el sprite)
 static const uint8_t CRACK1[][2] = { {15,8},{16,9},{15,10} };
@@ -990,7 +1028,7 @@ void loop() {
   // DMA del frame anterior (a 40-65 ms solapaba y causaba flashes negros; con
   // sprites grandes el dibujo tarda mas, asi que se deja colchon)
   // A move effect playing gets the minigames' faster frame rate too.
-  if (now - lastRender >= (uint32_t)((gameOpen || sackOpen || spdOpen ||
+  if (now - lastRender >= (uint32_t)((gameOpen || sackOpen || spdOpen || arcadeOpen ||
                                      (battleOpen && btlFxActive())) ? 85 : 100)) {
     lastRender = now;
     render();
@@ -1297,6 +1335,7 @@ void handleTouch() {
   gTouchIrq = false;
   int16_t x, y;
   bool pressed = touch.getPoint(&x, &y, 1) > 0;
+  arcadeTouchPeek(pressed, x, y);   // only reads: steers BERRY CATCH while a finger is down
 
   // saco de entrenamiento: cada toque cuenta al instante (aporrear rapido)
   if (sackOpen) {
@@ -1561,6 +1600,19 @@ int uiSleepButton(int *cx, int *cy) {
   if (cx) *cx = buttons[BTN_LIGHT].cx;
   if (cy) *cy = buttons[BTN_LIGHT].cy;
   return BTN_LIGHT;
+}
+
+// A home button's tap column (see BTN_HIT). Inclusive bounds.
+void uiButtonHitRect(int i, int *x0, int *y0, int *x1, int *y1) {
+  if (i < 0 || i >= BTN_COUNT) return;
+  *x0 = buttons[i].cx - BTN_HIT; *x1 = buttons[i].cx + BTN_HIT - 1;
+  *y0 = buttons[i].cy - BTN_HIT_TOP; *y1 = buttons[i].cy + BTN_HIT;
+}
+bool uiButtonHit(int i, int x, int y) {
+  int x0, y0, x1, y1;
+  if (i < 0 || i >= BTN_COUNT) return false;
+  uiButtonHitRect(i, &x0, &y0, &x1, &y1);
+  return x >= x0 && x <= x1 && y >= y0 && y <= y1;
 }
 
 void uiButtonAt(int i, int *cx, int *cy, int *half) {
@@ -2119,8 +2171,7 @@ void onTap(int16_t x, int16_t y) {
     if (pet.wantFarewellButton()) { choiceKind = 2; choiceUntil = millis() + 12000; return; }
   }
   for (int i = 0; i < BTN_COUNT; i++) {
-    int dx = x - buttons[i].cx, dy = y - buttons[i].cy;
-    if (dx * dx + dy * dy <= BTN_HIT * BTN_HIT) {
+    if (uiButtonHit(i, x, y)) {
       if (uiButtonDisabled(i)) { sfxPlay(SFX_DENY); return; }
       sfxPlay(SFX_TAP);
       if (i == BTN_FOOD) feedMenuUntil = millis() + 6000;
@@ -2179,90 +2230,7 @@ static const uint16_t BIOME_SOIL[6] = {
   C565(0xe6, 0xee, 0xf5),  // 5 nieve
 };
 
-void drawClouds(uint32_t now, uint16_t col) {
-  for (int k = 0; k < 2; k++) {
-    int cx = (int)((now / 50 + k * 250) % 560) - 40;
-    int cy = 70 + k * 34;
-    gfx->fillCircle(cx, cy, 16, col);
-    gfx->fillCircle(cx + 18, cy + 3, 13, col);
-    gfx->fillCircle(cx - 15, cy + 4, 12, col);
-  }
-}
-
-void drawScene(uint8_t biome, uint32_t now, bool night) {
-  night = rankSceneNight(night);   // the player's scene theme (ui_rank.ino)
-  int h = sceneHour();
-  uint16_t top, bot;
-  if (night)            { top = C565(0x0c, 0x12, 0x24); bot = C565(0x1e, 0x26, 0x46); }
-  else if (h < 8)       { top = C565(0xd1, 0x6a, 0x86); bot = C565(0xf3, 0xb8, 0x7c); }  // amanecer
-  else if (h < 18)      { top = C565(0x8f, 0xc8, 0xea); bot = C565(0xdc, 0xee, 0xe6); }  // dia
-  else                  { top = C565(0xc7, 0x5a, 0x4a); bot = C565(0xf0, 0xae, 0x64); }  // atardecer
-  rankSceneSky(top, bot, night);
-
-  // cielo en bandas
-  for (int y = 0; y < HORIZON; y += 8)
-    gfx->fillRect(0, y, 466, 8, lerp565(top, bot, y, HORIZON));
-
-  // sol o luna
-  if (night) {
-    gfx->fillCircle(360, 78, 24, C565(0xe8, 0xee, 0xf5));
-    gfx->fillCircle(370, 72, 22, lerp565(top, bot, 78, HORIZON));  // creciente
-    for (auto &st : STARS) gfx->fillRect(st[0], st[1], 4, 4, UI_WHITE);
-  } else if (h < 18) {
-    gfx->fillCircle(360, 84, 26, h < 8 ? C565(0xff, 0xd9, 0x8a) : C565(0xff, 0xe7, 0x9f));
-    drawClouds(now, C565(0xff, 0xff, 0xff));
-  } else {
-    gfx->fillCircle(233, HORIZON - 6, 34, C565(0xff, 0xf1, 0xc8));  // sol poniente
-  }
-
-  // mar de la playa: una franja de agua sobre la arena
-  uint16_t soil = BIOME_SOIL[biome < 6 ? biome : 0];
-  if (night) soil = lerp565(soil, C565(0x16, 0x1c, 0x30), 9, 16);
-  if (biome == 1) {
-    uint16_t sea = night ? C565(0x1c, 0x34, 0x52) : C565(0x4f, 0x96, 0xc4);
-    gfx->fillRect(0, HORIZON - 26, 466, 26, sea);
-    for (int i = 0; i < 3; i++) {
-      int wy = HORIZON - 22 + i * 7;
-      uint16_t fc = night ? C565(0x3a, 0x58, 0x78) : C565(0xbf, 0xe6, 0xf5);
-      gfx->fillRect(60 + ((now / 60 + i * 30) % 60), wy, 26, 2, fc);
-      gfx->fillRect(300 - ((now / 60 + i * 20) % 60), wy, 26, 2, fc);
-    }
-  }
-
-  // suelo
-  gfx->fillRect(0, HORIZON, 466, 466 - HORIZON, soil);
-  uint16_t hill = lerp565(soil, night ? C565(0x0c, 0x12, 0x24) : C565(0xff, 0xff, 0xff), 3, 16);
-  gfx->fillRoundRect(-60, HORIZON - 14, 586, 60, 30, hill);
-
-  // detalles del bioma
-  uint16_t dk = lerp565(soil, C565(0x10, 0x18, 0x20), night ? 11 : 7, 16);
-  if (biome == 2) {  // bosque: coniferas en silueta
-    for (int tx : { 60, 150, 360, 416 }) {
-      gfx->fillTriangle(tx, HORIZON - 46, tx - 16, HORIZON, tx + 16, HORIZON, dk);
-      gfx->fillTriangle(tx, HORIZON - 60, tx - 12, HORIZON - 28, tx + 12, HORIZON - 28, dk);
-    }
-  } else if (biome == 3) {  // volcan: rocas y brasas
-    gfx->fillTriangle(70, HORIZON, 40, HORIZON + 30, 100, HORIZON + 30, dk);
-    gfx->fillTriangle(400, HORIZON + 4, 372, HORIZON + 30, 430, HORIZON + 30, dk);
-    if (!night)
-      for (int e = 0; e < 4; e++)
-        gfx->fillRect(120 + e * 70, HORIZON + 8 + (e % 2) * 6, 4, 4, C565(0xff, 0x9b, 0x3a));
-  } else if (biome == 4) {  // montana: cumbres al fondo
-    gfx->fillTriangle(140, HORIZON - 50, 60, HORIZON, 220, HORIZON, dk);
-    gfx->fillTriangle(330, HORIZON - 38, 250, HORIZON, 410, HORIZON, dk);
-  } else if (biome == 5 && !night) {  // nieve: copos cayendo
-    for (int f = 0; f < 10; f++) {
-      int fx = (f * 53 + now / 40) % 466;
-      int fy = (f * 90 + now / 18) % HORIZON;
-      gfx->fillRect(fx, fy, 3, 3, UI_WHITE);
-    }
-  } else if (biome == 0) {  // pradera: matas de hierba
-    for (int gx : { 80, 175, 300, 395 })
-      for (int b = -1; b <= 1; b++)
-        gfx->fillRect(gx + b * 5, HORIZON + 6, 2, 8 + (b == 0 ? 4 : 0), dk);
-  }
-  rankSceneExtras(now, night);
-}
+// drawScene() (the home scene, every biome and time of day) lives in ui_home.ino.
 
 // primera partida: elige inicial entre Bulbasaur / Charmander / Squirtle
 void renderStarterSelect() {
@@ -2482,17 +2450,14 @@ void render() {
       for (auto &c : CRACK2) gfx->fillRect(x + c[0] * s, y + c[1] * s, s, s, INK_K);
     if (pet.eggRarity() >= R_RARO) {
       const char *rar = (pet.eggRarity() == R_LEGENDARIO) ? T(S_EGG_LEGEND) : T(S_EGG_RARE);
-      gfx->setTextColor(pet.eggRarity() == R_LEGENDARIO ? UI_BAR_WARN : 0x4C98);
-      gfx->setTextSize(2);
-      gfx->setCursor(CX - strlen(rar) * 6, 316);
-      gfx->print(rar);
+      hudText(rar, CX, 312, pet.eggRarity() == R_LEGENDARIO ? UI_BAR_WARN : 0x4C98);
     }
     char reg[24];
     snprintf(reg, sizeof(reg), T(S_POKEDEX_FMT), pet.registeredCount(), DEX_COUNT);
-    gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
+    drawHudBand();   // the pastel strip the action buttons sit on (ui_home.ino)
     gfx->setTextColor(inkColor());
     gfx->setTextSize(2);
-    gfx->setCursor(CX - strlen(reg) * 6, 344);
+    gfx->setCursor(CX - strlen(reg) * 6, 348);
     gfx->print(reg);
 
     // Which generation this egg comes from. It lives HERE rather than in the
@@ -2506,13 +2471,14 @@ void render() {
     const char *base = pet.nick[0] ? pet.nick : d.name;
     snprintf(name, sizeof(name), T(S_NAME_FMT), pet.shiny ? "*" : "", base, pet.level());
     drawHeader(name, gNight ? UI_INK_NIGHT : d.accent, statusMsg());
-    drawStreakBadge();
     drawPet();
     drawBath();
     drawPoops();
-    // panel inferior: base limpia para barras y botones sobre el paisaje
-    gfx->fillRect(0, 312, 466, 154, gNight ? UI_BG_NIGHT : UI_BG_DAY);
-    drawBars();
+    // the HUD over the scene (ui_home.ino): the four need gauges on the bezel,
+    // the bond/streak line, the action band and its buttons
+    drawHudBand();
+    drawNeedGauges();
+    drawInfoLine();
     drawButtons();
     drawCelebration();
     if (pet.wantEvolveButton()) drawEvolveButton();        // CTA rojo: evolucionar
@@ -2520,12 +2486,7 @@ void render() {
     else if (pet.wantFarewellButton()) drawFarewellButton();  // CTA dorado: despedida
   }
 
-  if (pet.sleeping) {
-    gfx->setTextColor(UI_INK_NIGHT);
-    gfx->setTextSize(3);
-    gfx->setCursor(320, 130);
-    gfx->print("Zz");
-  }
+  if (pet.sleeping) drawSleepZ(millis());   // rising Z's (ui_home.ino)
 
   // selector de comida
   if (feedMenuUntil) {
@@ -2794,20 +2755,6 @@ void clockTap(int16_t x, int16_t y) {
     }
   }
   if (y >= 340 && y <= 388 && x >= 133 && x <= 333) { applyClock(); return; }
-}
-
-// llama + numero de racha arriba a la izquierda
-void drawStreakBadge() {
-  if (pet.streak < 1) return;
-  int x = 26, y = 16;
-  gfx->fillTriangle(x + 8, y, x + 1, y + 17, x + 15, y + 17, UI_BAR_BAD);
-  gfx->fillTriangle(x + 8, y + 7, x + 4, y + 17, x + 12, y + 17, UI_BAR_WARN);
-  char s[6];
-  snprintf(s, sizeof(s), "%u", pet.streak);
-  gfx->setTextColor(inkColor());
-  gfx->setTextSize(2);
-  gfx->setCursor(x + 22, y + 2);
-  gfx->print(s);
 }
 
 // banner temporal: medalla nueva o hito de racha
@@ -3620,47 +3567,10 @@ static void btlResolve(uint8_t yourMove) {
   }
 }
 
-static void btlHpBar(int x, int y, int w, const Combatant &c, uint16_t shown) {
-  int fw = c.maxHp ? (w - 4) * shown / c.maxHp : 0;
-  uint16_t col = (shown * 2 > c.maxHp) ? UI_BAR_OK
-                 : (shown * 4 > c.maxHp) ? UI_BAR_WARN : UI_BAR_BAD;
-  gfx->fillRoundRect(x, y, w, 14, 4, UI_TRACK);
-  if (fw > 0) gfx->fillRoundRect(x + 2, y + 2, fw, 10, 3, col);
-  gfx->drawRoundRect(x, y, w, 14, 4, UI_INK);
-}
-
-static void btlSide(int tx, int ty, int sx, int sy, const Combatant &c, uint8_t who) {
-  // the scenes are busy, so the name and bar sit on their own plate rather
-  // than fighting the artwork for contrast
-  int ph = (who == 0) ? 54 : 40;
-  gfx->fillRoundRect(tx - 8, ty - 8, 158, ph, 8, UI_BG_DAY);
-  gfx->drawRoundRect(tx - 8, ty - 8, 158, ph, 8, UI_INK);
-  char l[28];
-  snprintf(l, sizeof(l), "%s Lv.%u", c.name, c.level);
-  gfx->setTextColor(UI_INK);
-  gfx->setTextSize(1);
-  gfx->setCursor(tx, ty);
-  gfx->print(l);
-  gfx->setTextColor(UI_BAR_WARN);
-  gfx->setCursor(tx, ty + 14);
-  gfx->print("HP");
-  btlHpBar(tx + 18, ty + 12, 122, c, btlHpShown[who]);
-  if (who == 0) {                 // your own numbers, as the games do
-    char hp[16];
-    snprintf(hp, sizeof(hp), "%u/%u", btlHpShown[who], c.maxHp);
-    gfx->setTextColor(UI_INK);
-    gfx->setCursor(tx + 140 - (int)strlen(hp) * 6, ty + 28);
-    gfx->print(hp);
-  }
-  if (c.ailment != AIL_NONE) {   // a status is the thing you most need to see
-    static const StrId AIL_STR[] = { S_AIL_PARA, S_AIL_PARA, S_AIL_BURN, S_AIL_POISON,
-                                     S_AIL_SLEEP, S_AIL_FREEZE, S_AIL_CONFUSE };
-    gfx->setTextColor(UI_BAR_BAD);
-    gfx->setCursor(tx + 18, ty + 28);
-    gfx->print(T(AIL_STR[c.ailment]));
-  }
-  // a platform under each creature, so they stand in the scene rather than
-  // floating over it
+// One side: its HP card (ui_battle.ino), then the creature on its platform.
+static void btlSide(const Combatant &c, uint8_t who) {
+  btlCard(c, who, btlHpShown[who]);
+  const int sx = who ? BTL_FOE_X : BTL_YOU_X, feet = who ? BTL_FOE_FEET : BTL_YOU_FEET;
   uint32_t now = millis();
   int ox = 0, oy = 0;
   bool flash = false;
@@ -3703,13 +3613,14 @@ static void btlSide(int tx, int ty, int sx, int sy, const Combatant &c, uint8_t 
     } else if (lunging && btlPmd[who].has(PMD_ATTACK)) {
       act = PMD_ATTACK; loop = false; t = now - btlLungeFrom[who];
     }
-    drawPmdActM(btlPmd[who], act, sx + 24 + ox, sy + 78 + oy, t, loop, false, 4);
+    drawPmdActM(btlPmd[who], act, sx + ox, feet + oy, t, loop, false, 4);
     return;
   }
   const uint8_t *th = thumbs.get(c.dex);
   if (!th) return;
   if (hurting) flash = ((btlHitUntil[who] - now) / 60) % 2 == 0;
-  drawThumb(th, sx + ox, sy + oy, 3, flash);
+  // the flat thumbnail is centred in an 80 px cell; its feet sit ~78 below
+  drawThumb(th, sx - 40 + ox, feet - 78 + oy, 3, flash);
 }
 
 // Bars drain rather than snap: a hit that removes half your health should be
@@ -3732,12 +3643,29 @@ static void btlEaseBars() {
 void renderWin() {
   const Trainer &t = BTL_TRAINERS[btlTrainer];
   gfx->fillScreen(RGB565_BLACK);
-  gfx->fillCircle(CX, CY, 231, UI_BG_DAY);
+  // a navy rim around the cream, the battle screen's frame
+  gfx->fillCircle(CX, CY, 231, 0x1928);
+  gfx->fillCircle(CX, CY, 224, UI_BG_DAY);
+  if (btlKind != BK_REMATCH) {
+    // a sunburst behind the badge: twelve rays, a triangle each
+    const int by = 190, R = 104;
+    for (int k = 0; k < 24; k += 2) {
+      float a0 = k * 0.2618f + 0.06f, a1 = (k + 1) * 0.2618f - 0.06f;
+      gfx->fillTriangle(CX, by, CX + (int)(R * cosf(a0)), by + (int)(R * sinf(a0)),
+                        CX + (int)(R * cosf(a1)), by + (int)(R * sinf(a1)), 0xFF15);
+    }
+    gfx->fillCircle(CX, by, 66, 0xFFFF);
+    gfx->drawCircle(CX, by, 66, 0xF6AD);
+    gfx->drawCircle(CX, by, 67, 0xF6AD);
+  }
 
-  gfx->setTextColor(UI_BAR_WARN);
-  gfx->setTextSize(3);
-  gfx->setCursor(CX - strlen(T(S_BTL_WIN)) * 9, 54);
-  gfx->print(T(S_BTL_WIN));
+  // the title on the battle screen's banner, in gold
+  {
+    const char *w = T(S_BTL_WIN);
+    uint8_t sz = strlen(w) * 18 <= 200 ? 3 : 2;
+    int bw = (int)strlen(w) * 6 * sz + 52;
+    bbBanner(CX - bw / 2, 38, bw, 36, btlHard ? 0xFE60 : 0xE8E4, w, sz);
+  }
 
   char l[40];
   snprintf(l, sizeof(l), T(S_BTL_BEAT), t.name);
@@ -3763,11 +3691,11 @@ void renderWin() {
       gfx->fillCircle(CX, by, 26, typeColor(tr.type));
       gfx->drawCircle(CX, by, 26, UI_INK);
     }
-    if (btlNewBadge) {
-      gfx->setTextColor(UI_BAR_OK);
-      gfx->setTextSize(2);
-      gfx->setCursor(CX - strlen(T(S_BTL_NEWBADGE)) * 6, 286);
-      gfx->print(T(S_BTL_NEWBADGE));
+    if (btlNewBadge) {   // a green ribbon under the burst
+      const char *nb = T(S_BTL_NEWBADGE);
+      int nw = (int)strlen(nb) * 12 + 28;
+      bbChunky(CX - nw / 2, 278, nw, 30, 0x3F2A, 0x2584, 0x9FB5);
+      bbText(nb, CX - (int)strlen(nb) * 6, 284, 2, 0xFFFF, 0x2584);
     }
   }
   if (btlKind != BK_REMATCH) {
@@ -3794,10 +3722,8 @@ void renderWin() {
     gfx->print(T(S_WIN_MAXED));
   }
 
-  gfx->setTextColor(UI_TRACK);
-  gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(T(S_BACK)) * 6, 380);
-  gfx->print(T(S_BACK));
+  // a tap anywhere leaves; BACK is drawn as the battle's own button
+  bbWinBack(370);
   gfx->flush();
 }
 
@@ -3806,15 +3732,17 @@ void renderBattle() {
   btlEaseBars();
   gfx->fillScreen(RGB565_BLACK);
   drawBattleBack();
-  // the lower band stays flat so the move grid and the HP text keep their
-  // contrast against it
-  gfx->fillRect(0, 254, 466, 212, UI_BG_DAY);
+  bbDrawGround();                         // vignette, arena grid, the two platforms
 
-  // x=82 not 58: at y=60 the round bezel starts around x=77, and a longer
-  // name like BLASTOISE was losing its first characters off the edge
-  btlSide(82, 82, 300, 40, btlFoe, 1);    // foe reads top-left, sprite top-right
-  btlSide(250, 190, 76, 168, btlYou, 0);  // you read bottom-right, sprite bottom-left
+  // foe reads top-left with its sprite top-right; you read bottom-right with
+  // your sprite bottom-left
+  btlSide(btlFoe, 1);
+  btlSide(btlYou, 0);
   btlFxDraw();                            // the moves themselves, over both
+  // The band goes on AFTER the creatures: one that faints sinks behind the
+  // menu instead of sliding down over its buttons.
+  bbDrawBand();
+  bbDrawBanner();
 
   // Waiting on the other device. Without this the screen is identical to the
   // one where it is your turn, so a tap that has been sent and a tap that was
@@ -3822,88 +3750,42 @@ void renderBattle() {
   bool lanWait = btlLink && !btlOver &&
                  (btlLinkHost ? (btlMyAct && !lan.hasPeerAct())
                               : (lan.state == LINK_WAITING));
+  const int BOX_H = BTL_CELL_H * 2 + 8;
   if (lanWait && !btlMsgCount) {
-    gfx->fillRoundRect(BTL_GRID_X, BTL_GRID_Y, 328, BTL_CELL_H * 2 + 8, 12, UI_WHITE);
-    gfx->drawRoundRect(BTL_GRID_X, BTL_GRID_Y, 328, BTL_CELL_H * 2 + 8, 12, UI_INK);
-    gfx->setTextColor(UI_TRACK);
-    gfx->setTextSize(1);
+    bbMsgBox(BTL_GRID_X, BTL_GRID_Y, 328, BOX_H, 0x3D7F, false);
     const char *w = T(S_LAN_WAITFOE);
-    gfx->setCursor(CX - (int)strlen(w) * 3, BTL_GRID_Y + 40);
-    gfx->print(w);
+    bbText(w, CX - (int)strlen(w) * 3, BTL_GRID_Y + 44, 1, 0x7BCF, -1);
   } else if (btlMsgCount) {            // narration takes over the menu area
-    gfx->fillRoundRect(BTL_GRID_X, BTL_GRID_Y, 328, BTL_CELL_H * 2 + 8, 12, UI_WHITE);
-    gfx->drawRoundRect(BTL_GRID_X, BTL_GRID_Y, 328, BTL_CELL_H * 2 + 8, 12, UI_INK);
-    gfx->setTextColor(UI_INK);
-    gfx->setTextSize(1);
-    for (uint8_t i = 0; i < btlMsgCount && i < 4; i++) {
-      gfx->setCursor(CX - (int)strlen(btlMsg[i]) * 3, BTL_GRID_Y + 14 + i * 18);
-      gfx->print(btlMsg[i]);
-    }
-    gfx->setTextColor(UI_TRACK);
-    gfx->setCursor(CX - 30, BTL_GRID_Y + 84);
-    gfx->print("tap...");
+    // at the end of a fight the frame says how it went
+    uint16_t tone = btlOver ? (btlWon ? 0x3F2A : 0xF0E4) : 0x5CBF;
+    bbMsgBox(BTL_GRID_X, BTL_GRID_Y, 328, BOX_H, tone, true);
+    uint8_t n = btlMsgCount < 4 ? btlMsgCount : 4;
+    // large text when every line fits the box, the small font otherwise: one
+    // size for the whole box, so the lines never look mismatched
+    uint8_t sz = n <= 3 ? 2 : 1;
+    for (uint8_t i = 0; i < n; i++)
+      if (strlen(btlMsg[i]) * 12 > 300) sz = 1;
+    int lh = sz == 2 ? 22 : 18;
+    int y0 = BTL_GRID_Y + BOX_H / 2 - (n * lh - (lh - 8 * sz)) / 2;
+    for (uint8_t i = 0; i < n; i++)
+      bbText(btlMsg[i], CX - (int)strlen(btlMsg[i]) * 3 * sz, y0 + i * lh, sz, UI_INK, -1);
   } else if (btlMenu == 0) {
     // FIGHT across the top, then POKEMON and RUN side by side. Three full-width
     // rows do not fit: the panel is round, and at that depth the chord is only
     // ~250 px. The lower two reuse the move grid's cells, so they inherit its
     // padded hit areas -- which is what made POKEMON hard to press before.
-    gfx->fillRoundRect(BTL_GRID_X, BTL_GRID_Y, 328, BTL_CELL_H, 10, UI_BG_DAY);
-    gfx->drawRoundRect(BTL_GRID_X, BTL_GRID_Y, 328, BTL_CELL_H, 10, UI_INK);
-    gfx->setTextColor(UI_INK);
-    gfx->setTextSize(2);
-    gfx->setCursor(CX - (int)strlen(T(S_FIGHT)) * 6, BTL_GRID_Y + 14);
-    gfx->print(T(S_FIGHT));
-    const char *low[2] = { T(S_BTL_SWITCH), T(S_BTL_RUN) };
-    for (int i = 0; i < 2; i++) {
-      int x = BTL_CELL_X(i + 2), y = BTL_CELL_Y(i + 2);
-      gfx->fillRoundRect(x, y, BTL_CELL_W, BTL_CELL_H, 10, UI_TRACK);
-      gfx->drawRoundRect(x, y, BTL_CELL_W, BTL_CELL_H, 10, UI_INK);
-      gfx->setTextColor(UI_INK);
-      gfx->setTextSize(2);
-      gfx->setCursor(x + (BTL_CELL_W - (int)strlen(low[i]) * 12) / 2, y + 14);
-      gfx->print(low[i]);
-    }
+    bbDrawCommands();
   } else if (btlMenu == 2) {
     drawBtlBack();
     // who to bring on instead; the current one and anything fainted is inert
     for (uint8_t i = 0; i < btlSquadN && i < 4; i++) {
-      int x = BTL_CELL_X(i), y = BTL_CELL_Y(i);
       const Combatant &m = (i == btlSquadAt) ? btlYou : btlSquad[i];
-      bool usable = (i != btlSquadAt) && !m.fainted();
-      gfx->fillRoundRect(x, y, BTL_CELL_W, BTL_CELL_H, 10, usable ? UI_BG_DAY : UI_TRACK);
-      gfx->drawRoundRect(x, y, BTL_CELL_W, BTL_CELL_H, 10, usable ? UI_INK : 0x8410);
-      gfx->setTextColor(usable ? UI_INK : 0x8410);
-      gfx->setTextSize(1);
-      gfx->setCursor(x + 10, y + 10);
-      gfx->print(m.name);
-      char hp[20];
-      snprintf(hp, sizeof(hp), "%u/%u", m.hp, m.maxHp);
-      gfx->setCursor(x + 10, y + 28);
-      gfx->print(hp);
+      bbDrawSwitch(i, m, (i != btlSquadAt) && !m.fainted(), i == btlSquadAt);
     }
   } else {
     drawBtlBack();
-    for (int i = 0; i < MOVE_SLOTS; i++) {
-      int x = BTL_CELL_X(i), y = BTL_CELL_Y(i);
-      uint8_t mv = btlYou.moves[i];
-      gfx->fillRoundRect(x, y, BTL_CELL_W, BTL_CELL_H, 10, mv ? UI_BG_DAY : UI_TRACK);
-      gfx->drawRoundRect(x, y, BTL_CELL_W, BTL_CELL_H, 10, UI_INK);
-      if (!mv) continue;
-      gfx->setTextColor(UI_INK);
-      gfx->setTextSize(1);
-      gfx->setCursor(x + 10, y + 12);
-      gfx->print(MOVE_TBL[mv].name);
-      // Same chip as the move list: in a fight the type IS the decision, and
-      // grey 6px text was the least visible thing on the busiest screen.
-      int cw = drawTypeChip(x + 10, y + 26, MOVE_TBL[mv].type);
-      if (hasStab(btlYou.dex, MOVE_TBL[mv].type) &&
-          MOVE_TBL[mv].cat != MC_STATUS) {
-        gfx->setTextSize(1);
-        gfx->setTextColor(DEX_TBL[btlYou.dex].accent);
-        gfx->setCursor(x + 10 + cw + 4, y + 30);
-        gfx->print("+");
-      }
-    }
+    // In a fight the type IS the decision, so each move wears its type's colour.
+    for (int i = 0; i < MOVE_SLOTS; i++) bbDrawMove(i, btlYou.moves[i], btlYou.dex);
   }
   gfx->flush();
 }
@@ -3970,14 +3852,8 @@ int btlCellIndexAt(int16_t x, int16_t y) {
 
 // The way out of the move and switch screens. Without it the only exits were
 // choosing something or leaving the fight entirely.
-static void drawBtlBack() {
-  gfx->fillRoundRect(BTL_BACK_X, BTL_BACK_Y, BTL_BACK_W, BTL_BACK_H, 11, UI_TRACK);
-  gfx->drawRoundRect(BTL_BACK_X, BTL_BACK_Y, BTL_BACK_W, BTL_BACK_H, 11, UI_INK);
-  gfx->setTextColor(UI_INK);
-  gfx->setTextSize(2);
-  gfx->setCursor(CX - (int)strlen(T(S_BACK)) * 6, BTL_BACK_Y + 14);
-  gfx->print(T(S_BACK));
-}
+static void bbDrawBack();
+static void drawBtlBack() { bbDrawBack(); }
 
 static bool btlBackTap(int16_t x, int16_t y) {
   if (x < BTL_BACK_X || x > BTL_BACK_X + BTL_BACK_W ||
@@ -4665,7 +4541,7 @@ static void drawEggRegion() {
   gfx->setTextSize(2);
   gfx->setCursor(EGGREG_X + (EGGREG_W - (int)strlen(l) * 12) / 2, EGGREG_Y + 9);
   gfx->print(l);
-  gfx->setTextColor(UI_TRACK);
+  gfx->setTextColor(gNight ? C565(0x8a, 0x92, 0xbc) : C565(0x84, 0x7a, 0xa4));   // muted, on the HUD band
   gfx->setTextSize(1);
   gfx->setCursor(CX - (int)strlen(T(S_EGG_REGION)) * 3, EGGREG_Y + EGGREG_H + 6);
   gfx->print(T(S_EGG_REGION));
@@ -5531,41 +5407,6 @@ void galleryTap(int16_t x, int16_t y) {
   galleryPmd.load(dex, pet.isShinyRegistered(dex));
 }
 
-void drawBattery() {
-  int pc = batPercent();
-  if (pc < 0) return;  // sin bateria conectada
-  int x = CX - 14, y = 12, w = 24, h = 11;
-  bool charging = batCharging();
-  uint16_t col = charging ? UI_BAR_OK
-                 : (pc >= 40) ? inkColor()
-                 : (pc >= 15) ? UI_BAR_WARN
-                              : UI_BAR_BAD;
-  gfx->drawRoundRect(x, y, w, h, 2, col);
-  gfx->fillRect(x + w, y + 3, 3, 5, col);  // borne
-  if (charging) {
-    // rayo de carga (zigzag) en vez de la barra de nivel
-    uint16_t bolt = C565(0xff, 0xd9, 0x4a);
-    int bx = x + w / 2;
-    gfx->fillTriangle(bx + 3, y + 1, bx - 4, y + 6, bx + 1, y + 6, bolt);
-    gfx->fillTriangle(bx - 1, y + 5, bx + 4, y + 5, bx - 3, y + 10, bolt);
-  } else {
-    int fw = (w - 4) * pc / 100;
-    if (fw > 0) gfx->fillRect(x + 2, y + 2, fw, h - 4, col);
-  }
-}
-
-void drawHeader(const char *name, uint16_t nameColor, const char *msg) {
-  drawBattery();
-  gfx->setTextColor(nameColor);
-  gfx->setTextSize(3);
-  gfx->setCursor(CX - strlen(name) * 9, 52);
-  gfx->print(name);
-  gfx->setTextColor(inkColor());
-  gfx->setTextSize(2);
-  gfx->setCursor(CX - strlen(msg) * 6, 90);
-  gfx->print(msg);
-}
-
 // animacion de la ceremonia (10s): despedida = reverencia con corazones y se
 // aleja caminando; escapada = se asusta y sale corriendo. Sustituye al idle.
 void drawCeremony() {
@@ -6067,35 +5908,6 @@ void overlayMouth(const Species &sp, int x, int y, int s, bool open) {
 void drawPoops() {
   for (int i = 0; i < pet.poops; i++) {
     drawMap(SPR_POOP, 32, 36 + i * 46, 244, 2, false);
-  }
-}
-
-void drawBars() {
-  drawBar(78, 318, T(S_BAR_FOOD), pet.fullness);
-  drawBar(244, 318, T(S_BAR_JOY), pet.joy);
-  drawBar(78, 346, T(S_BAR_ENE), pet.energy);
-  drawBar(244, 346, T(S_BAR_HYG), pet.hygiene);
-}
-
-void drawBar(int x, int y, const char *label, uint8_t val) {
-  gfx->setTextColor(inkColor());
-  gfx->setTextSize(2);
-  gfx->setCursor(x, y);
-  gfx->print(label);
-  int bx = x + 48, bw = 100, bh = 15;  // +48: deja sitio a etiquetas de 4 letras (EN)
-  uint16_t fill = (val >= 50) ? UI_BAR_OK : (val >= 25) ? UI_BAR_WARN : UI_BAR_BAD;
-  gfx->fillRoundRect(bx, y, bw, bh, 4, UI_TRACK);
-  int fw = (bw - 4) * val / 100;
-  if (fw > 0) gfx->fillRoundRect(bx + 2, y + 2, fw, bh - 4, 3, fill);
-}
-
-void drawButtons() {
-  for (int i = 0; i < BTN_COUNT; i++) {
-    bool off = uiButtonDisabled(i);   // durmiendo solo funciona LUZ
-    int bx = buttons[i].cx - BTN_HALF, by = buttons[i].cy - BTN_HALF;
-    if (!pet.sleeping) gfx->fillRoundRect(bx, by, 2 * BTN_HALF, 2 * BTN_HALF, 14, UI_WHITE);
-    gfx->drawRoundRect(bx, by, 2 * BTN_HALF, 2 * BTN_HALF, 14, inkColor());
-    if (!off) drawMap(buttons[i].icon, 16, buttons[i].cx - 16, buttons[i].cy - 16, 2, false);
   }
 }
 

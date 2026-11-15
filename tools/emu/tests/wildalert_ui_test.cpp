@@ -97,7 +97,7 @@ int main() {
   ck(wildMainOverlaps(228, 115, 238, 125) & 4, "...the TASK DONE banner is caught");
   ck(wildMainOverlaps(20, 60, 30, 70) & 1, "...the menu band is caught");
   ck(wildMainOverlaps(200, 200, 210, 210) & 2, "...the pet zone is caught");
-  ck(wildMainOverlaps(60, 320, 70, 330) & 64, "...the bars panel is caught");
+  ck(wildMainOverlaps(60, 350, 70, 360) & 64, "...the action band is caught (HUD_BAND_Y)");
   ck(wildMainOverlaps(2, 260, 12, 270) & 2048, "...off the round panel is caught");
   ck(wildBadgeHitTest(x0, y0) && wildBadgeHitTest(x1, y1) && !wildBadgeHitTest(x0 - 1, by) &&
      !wildBadgeHitTest(x1 + 1, by), "the hit test is exactly that rect");

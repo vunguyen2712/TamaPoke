@@ -263,6 +263,16 @@ HABITAT list, header-only `habitat.h` reading wild.cpp), `adventure-persona.md`
 (traits; banked ones live in `PartyMon::spare`), `adventure-friends.md`
 (gift swap two-phase commit, visits; LINK_PROTO 3 -- older boards refuse).
 
+**Battle screen art (v3.18)** lives in `ui_battle.ino`: banner, HP cards and
+type pills, platforms, ground grid/vignette, command and move buttons, message
+box. It only draws; `btlUiRect()` is the one answer to "where is X drawn" for
+the drawing, the taps and `battle_ui_test`. The creatures' stand points are
+`BTL_YOU_X/BTL_FOE_X` + `*_FEET` in TamaPoke.ino, and `FX_CX/FX_CY/FX_FEET` in
+`ui_movefx.ino` are DERIVED from them -- move a creature there, never by editing
+the FX arrays. The tap cells (`BTL_CELL_*`) are unchanged since v3.17, so the
+dozen tests that tap the grid still aim right. Blends write the canvas through
+`gfx->getFramebuffer()` (the emulator stub has it too).
+
 **Move effects (v3.16)** live in `ui_movefx.ino`. `moveFxShape()` is the one
 answer to "what a move looks like". `btlFxQueue()` lays each action of a turn on
 ONE timeline: it schedules the lunge, the flinch (`btlHitFrom`/`btlHitUntil`), the
@@ -279,6 +289,21 @@ the two-argument `Pet::trainStrength/trainSpeed/playResult(raw, eff)`. The
 natural end, leaving early and the results grade all ask those, so do not
 compute a gain anywhere else. `training_ui_test` covers it; numbers in README
 "Training games".
+
+**Arcade (v3.18)** lives in `ui_arcade.ino`, opened from the hub's ARCADE row
+(page 2). Four games for joy/bond, no stat. It borrows ui_train.ino's static
+helpers through forward declarations (the tab is concatenated before it) and
+the type sprites through `fxTypeIcon()`/`fxTypeCol()` in ui_movefx.ino. ONE end
+of a session, `arcFinish()` (idempotent): the clock, the last life, every way
+of leaving and the pet falling asleep all bank through it. ONE gate,
+`arcadeAllowed()`, for the hub row, `arcStart()` and the mid-game check.
+`arcade_ui_test` covers it.
+
+**Home screen (v3.18)** -- the scene (`drawScene`) and the HUD (header cloud,
+need arc gauges, bond/streak line, action band, buttons) live in `ui_home.ino`;
+render() still decides what is drawn when. The button geometry (`buttons[]`,
+`BTN_*`, `HUD_BAND_Y`) stays in TamaPoke.ino and `uiButtonHit()` is the one tap
+rule. `main_ui_test` reads the gauges back as pixels and taps every button.
 
 `tests/run.sh` no longer needs SDL (only the clickable emulator does);
 `SKIP_FW=1` skips its arduino-cli step.
@@ -794,7 +819,8 @@ confirm their licence or replace them.
 
 0. ~~Fight UI polish~~ **done**. HP plates carry the `HP` label and your own
    side shows numeric HP (`btlSide`). The platform ellipse was dropped on the
-   user's call, not forgotten. The layout matches the mainline arrangement:
+   user's call, then brought back in v3.18 when the user asked for the
+   handheld look (`ui_battle.ino`). The layout matches the mainline arrangement:
    foe info top-left / sprite top-right, you bottom-right / bottom-left.
 1b. ~~Kanto badge art~~ **done**. `tools/gen_badges.py` needs `rsvg-convert`
    (`brew install librsvg`) and regenerates `badges.h` from the upstream SVG.

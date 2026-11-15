@@ -3,7 +3,7 @@
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://vunguyen2712.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v3.17-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v3.18-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
 [![Stars](https://img.shields.io/github/stars/vunguyen2712/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/vunguyen2712/TamaPoke/stargazers)
@@ -18,7 +18,7 @@ included).
 >
 > Forked from [**DylanPDao/TamaPoke**](https://github.com/DylanPDao/TamaPoke),
 > which is itself a fork of Quique Tortosa's original (below). Everything from
-> v3.12 to v3.17 is new here; see **[What's new in this fork](#whats-new-in-this-fork)**.
+> v3.12 to v3.18 is new here; see **[What's new in this fork](#whats-new-in-this-fork)**.
 > Install it from your browser with the **[web installer](https://vunguyen2712.github.io/TamaPoke/web/)**.
 
 > ### 🙏 This is a fork of [**socquique/TamaPoke**](https://github.com/socquique/TamaPoke) by **Quique Tortosa**
@@ -39,8 +39,32 @@ included).
 
 ## What's new in this fork
 
-Six releases on top of DylanPDao's v3.11. The full rules and numbers for each
+Seven releases on top of DylanPDao's v3.11. The full rules and numbers for each
 are in the **Game manual** below.
+
+### v3.18: New look and the Arcade
+- **Home screen:**
+  - An illustrated, animated scene for each of the six biomes, with drifting
+    clouds, a sun with turning rays, a moon and stars at night, gulls, a
+    sailboat, fireflies and snow.
+  - Your pet's name sits on a cloud label, with a speech bubble for how it is
+    feeling.
+  - The four needs are curved gauges along the edge of the screen that turn
+    amber and then red as they drop.
+  - A pastel button bar at the bottom, with a label over each button.
+- **Battle screen:**
+  - A title banner (for example GYM 3 1/3 or TOWER F5).
+  - Framed HP cards with type and status tags.
+  - Creatures stand on white platforms over a floor with depth.
+  - Colour-coded FIGHT, POKEMON and RUN buttons, with moves coloured by type.
+  - A new win screen with a sunburst behind the badge.
+- **Arcade** (Adventure, page 2): four new mini games.
+  - **Berry Catch:** catch berries in a basket, dodge rocks.
+  - **Memory:** match pairs of type symbols.
+  - **Echo:** repeat a growing sequence on four type pads.
+  - **Pop-up:** tap critters as they pop up, avoid the bombs.
+  - Each has a best score and gives joy and bond, plus one item prize a day
+    for an S grade.
 
 ### v3.17: Water Gun, badge art, training games
 - **Water Gun and Hydro Pump** pour one solid, rippling jet of water, with foam
@@ -129,6 +153,32 @@ Pokedex is empty.
 | Your creature | Its egg | Moves it knows |
 |---|---|---|
 | <img src="docs/screens/main.png" width="240"> | <img src="docs/screens/egg.png" width="240"> | <img src="docs/screens/moves.png" width="240"> |
+
+**The home screen (v3.18)** is an illustrated pixel-art scene with a HUD drawn
+round the bezel:
+
+- **Top:** battery, then the clock (HH:MM, carried forward on the board's own
+  timer between the 30 s RTC reads), the name and level on a **cloud label**,
+  and the status line (`It's happy`, `It's hungry!`...) in a **speech bubble**.
+  Tapping anywhere in that band (y 28-94) still opens the menu.
+- **The four needs are arc gauges hugging the round edge**: JOY upper-left,
+  FOOD lower-left, ENE upper-right, HYG lower-right, each labelled inside its
+  arc. A gauge fills from its lower end upward in proportion to the need
+  (0-100 over the arc's whole visible length) and is **green at 50+, amber at
+  25-49, red under 25** -- the same 25 the status line complains at. A red
+  gauge's rim pulses. They replace the four flat bars.
+- **Above the band:** a heart and BOND n on the left, the daily-streak flame and
+  its count on the right (the flame used to sit at (26,16), off the round panel).
+- **The action band** (from y 338 down, lavender by day, indigo at night): the
+  same four buttons -- FOOD, SLEEP, BATH, TRAIN -- as 56 px rounded tiles in
+  their own pastel, each with its label above it, 72 px apart on the panel's
+  curve (outer pair 14 px higher). Each button's tap area is a **column 72 px
+  wide from its label to 36 px below its centre**; the four columns meet edge
+  to edge, so a tap on a label or just off a tile still counts. Asleep, the
+  other three grey out and the light button reads **WAKE**.
+
+The egg screen keeps the scene and the band, with the Pokedex count and region
+pill in it; it shows no gauges.
 
 The egg carries a **region pill** — pick whether it hatches from Kanto, Johto,
 Hoenn or all three. Switching keeps the rarity it was granted and remembers each
@@ -451,6 +501,52 @@ After any ending, a **new egg** appears.
   out of the egg pool, so a partial sprite install is a supported state. A pack
   sent from the web installer is picked up **as it lands** — the region unlocks
   without a reboot.
+
+### The battle screen (v3.18)
+The fight is drawn over the foe's biome backdrop (day or night), framed like the
+handheld games:
+
+- **Title banner** at the top: a navy pill with diamond end caps naming the fight,
+  then which of the opponent's creatures is out of how many.
+
+  | Fight | Banner | Trim |
+  |---|---|---|
+  | Gym leader 1-8 | `GYM 3 1/3` | red (gold on HARD) |
+  | Elite 4 / champion | `ELITE 4 2/5` / `CHAMPION 1/6` | purple (gold on HARD) |
+  | Rematch | `REMATCH 1/6` | orange |
+  | Tower | `TOWER F7 2/3` (the floor being fought) | violet (gold for a smart-AI floor) |
+  | Weekly challenge | `CHALLENGE 1/3` | teal |
+  | LAN | `LAN 1/4` (the rival's squad) | blue |
+  | Wild | `WILD` | green |
+  | When it ends | `VICTORY` / `DEFEAT` | green / red |
+
+  A single-creature opponent shows no count. Text is large when it fits 156 px,
+  small otherwise.
+- **HP cards**: the foe's top-left, yours bottom-right. Name, `Lv`, an HP bar and
+  `current/max` for **both** sides. The bar is **green above 1/2**, **amber above
+  1/4**, **red at 1/4 and below**, and drains rather than snaps. Under each card,
+  a pill per **type** in the type's colour, and a purple pill for a **status**
+  (burn, poison...).
+- **Platforms**: each creature stands on a white elliptical platform with a soft
+  shadow -- the foe's centred at (334, 152) with radii 62 x 16 px, yours nearer and
+  bigger at (104, 232), radii 74 x 19. The move effects aim at the same stand points.
+- **Ground**: the backdrop fades into the bezel at the top and into the menu band
+  at the bottom. In an **arena fight** (gym, rematch, tower, challenge, LAN) a
+  perspective grid -- 13 lines to a vanishing point, 6 rungs crowding toward the
+  horizon -- is etched into the floor. Wild fights keep the bare scenery.
+- **Commands**, on a deep blue band under a red rule: **FIGHT** (red, full width),
+  **POKEMON** (orange, with how many of your squad can still fight, e.g. `2/3`)
+  and **RUN** (white). Same tap areas as before, every one at least 44 px tall.
+- **Moves**: four buttons in their **type's colour**: the name, the type, `POW n`
+  (or `STATUS`), and a yellow dot on a same-type (STAB) move. **BACK** is blue.
+- **Switching**: each creature with a small HP bar; the one already out is dark
+  blue, a fainted one greyed.
+- **Messages** sit in a framed box with a bobbing red arrow while a tap moves them
+  on. The frame turns green on a win and red on a loss. Lines are large when every
+  line fits (up to 3 lines of 25 characters), small otherwise.
+- **Winning a badge**: the badge (at 3x, with the gold halo on HARD) sits in a
+  white spotlight on a 12-ray sunburst, under a banner reading `You win!`, with
+  a green **NEW BADGE!** ribbon and a blue BACK button (a tap anywhere still leaves).
 
 ### Move effects (v3.16)
 Every move plays its own effect in its **type's colours**, with a pixel-art sprite
@@ -830,7 +926,7 @@ The SHINY CHARM halves the egg's shiny roll: 1/48 -> 1/24, and the best case
 #### Wild alerts and shiny chains
 
 **The "!" on the main screen.** A pulsing red circle with a "!" (gold when it
-is a shiny) appears left of the pet, above the bars, when the **next** wild
+is a shiny) appears left of the pet, beside the FOOD gauge, when the **next** wild
 encounter waiting today is worth a look. Tapping it opens WILD on exactly that
 creature -- the alert peeks at the same deterministic roll the WILD screen
 makes, and spends nothing. The hub's WILD row shows `!` at the same time.
@@ -1056,6 +1152,57 @@ Events for tasks: GIFT SENT and GIFT RECEIVED when a swap completes on that
 board; VISIT (the friend's species) when a visit pays its daily bonus.
 
 Design and the swap protocol: `docs/adventure-friends.md`.
+
+#### Arcade
+
+ADVENTURE > ARCADE (hub page 2, third row). Four short games played for fun,
+joy and the bond -- they train **no stat** (that is what the
+[Training games](#training-games) are for). The list shows each game with your
+best score; a star marks a game you have S-ranked. The row is greyed, and no
+game starts, while the pet is an **egg, asleep or in a ceremony**; if it falls
+asleep mid-game the session is banked and the list comes back.
+
+Shared with the training games: the **3-2-1 countdown** (1.8 s, nothing scores
+during it), the **COMBO** and its multiplier (**x1 below 5, x2 from 5, x3 from
+10** in a row), pop-ups, particles, the jolt and the rising blip. Every session
+ends on a **results card** (grade, stars, points, best, best combo, what the
+pet got); it goes back to the list by itself after 7 s, or on a tap after 0.7 s.
+
+**Leaving.** A tap on the top strip (y < 60) or a vertical swipe leaves a game
+and **banks it exactly as finishing would**; a horizontal swipe does too, except
+in BERRY CATCH, where dragging sideways is the control. Leaving the arcade from
+anywhere mid-game banks it as well. A session is paid once, however it ends.
+
+| game | length | rules |
+|---|---|---|
+| **BERRY CATCH** | 45 s, or 3 lives | Drag (or tap) to move the basket along the ground (0.9 px/ms; catches within 46 px). A berry is **1 + mult - 1**, a golden berry (8 %) **5 + mult - 1**. A berry that lands breaks the combo. From **6 s** rocks fall too (25 % of drops, 15 % faster): one in the basket costs a **life**, the combo and stuns the basket for 0.7 s; a rock that misses is harmless. A drop every 950 ms falling 0.16 px/ms at the start, every 420 ms at 0.34 px/ms by 45 s. |
+| **MEMORY** | 60 s | 4x4 cards, 8 pairs of type symbols (drawn with the move-effect sprites; 8 of 12 types with distinct shapes). Flip two: a pair stays up and is worth **10 x mult** (combo = pairs in a row). A mismatch shows for 0.7 s -- or until your next tap -- and turns back: no points lost, combo broken. Clearing the board is **+20** and deals a fresh one. |
+| **ECHO** | until the last life, at most 60 s | Four type pads -- FIRE top, WATER right, GRASS bottom, ELECTRIC left, each its own note (C E G C) -- play a sequence; repeat it. Each right pad **+1**, a cleared round **+its length**, and the next round adds one pad: clearing *n* rounds is **n x (n + 1)** points. A wrong pad, or **5 s** without a tap on your turn, costs one of **2 lives** and replays the same sequence. Playback: each pad lit 460 - 18 x length ms (at least 240), 140 ms apart. |
+| **POP-UP** | 45 s | Seven holes. Bop a critter for **1 + mult - 1**, a golden one (10 %, stays 3/4 as long) for **3 + mult - 1**. From **5 s** a BOMB can pop up (18 %): bopping it is **-5** points (never below 0) and the combo; left alone it fizzles. A critter that ducks back untapped, or a tap on an empty hole, breaks the combo. One critter at a time, **two from 8 s, three from 25 s**; each stays 1150 ms - 14 ms per hit (at least 550), a bomb 1300 ms. |
+
+**Grades** (points): 
+
+| game | B | A | S |
+|---|---|---|---|
+| BERRY CATCH | 25 | 50 | 80 |
+| MEMORY | 40 | 90 | 150 |
+| ECHO | 12 (3 rounds) | 30 (5) | 56 (7) |
+| POP-UP | 20 | 40 | 65 |
+
+**Rewards**, for a session that scored at least 1 point (a 0-point session pays
+and records nothing):
+
+- **Joy +4 / +8 / +12 / +16** for C / B / A / S, and **bond +1** (C, B) or
+  **+2** (A, S) -- the bond through the same daily cap of **20** as playing and
+  visits, so the card shows what the pet actually gained (0 once capped).
+- **-3 energy**.
+- A **PLAY** event, so the "play a minigame" tasks count arcade sessions.
+- **Once a day** (the care-streak day), the first **S** wins a small item:
+  an **ORAN BERRY** from BERRY CATCH or POP-UP, a **POKE BALL** from MEMORY or
+  ECHO. The list says whether today's prize is still to win.
+
+Bests and the prize day are saved (`arcHi`, 4 x 16-bit; `arcDay`) and are in
+the EXPORT backup.
 
 &nbsp;
 
@@ -1336,9 +1483,27 @@ German, Italian, Portuguese — switchable from the settings screen (swipe down)
 
 ## Backgrounds: biome + real time
 
-The idle screen paints the sky from the **RTC's real time** (dawn / day / dusk /
-night with moon and stars) and the ground from the **type's biome** (meadow,
-beach, forest, volcano, mountain, snow). Sleeping forces night.
+The idle screen paints the sky from the **RTC's real time** and the land from
+the **type's biome**, all procedurally (no bitmaps) and animated:
+
+| Time | Hours | Sky |
+|---|---|---|
+| dawn | 06-07 | rose to apricot; a warm sun with 12 slowly turning rays |
+| day | 08-17 | blue to pale; the rayed sun, two layers of drifting clouds, a pair of gulls crossing about every 36 s |
+| dusk | 18-19 | violet to amber; a low striped sun left of the pet |
+| night | 20-05, or asleep | deep blue; a crescent moon with a halo, 30 twinkling stars, dim clouds |
+
+| Biome | Far layer | Ground |
+|---|---|---|
+| meadow | two ranges of rolling hills with round trees | flowers in four colours, swaying grass tufts; fireflies at night |
+| beach | the sea with shimmering glints, a palm island, a sailboat drifting along the horizon | wet sand with a breathing foam line, shells, a starfish |
+| forest | a row of far pines and a framing near row | a clearing, red mushrooms, ferns; fireflies at night |
+| volcano | a cone with a pulsing crater, a lava trickle and rising smoke | glowing cracks, rocks, drifting embers |
+| mountain | three snow-capped peaks, a nearer range, a pine line | stones and a trodden path |
+| snow | snowy hills with snow-laden pines | drifts, a snowman, sparkles; snow always falling |
+
+Every scenery colour is tinted for the time of day (rose at dawn, amber at
+dusk, deep blue at night). Sleeping forces night.
 
 ## Layout
 

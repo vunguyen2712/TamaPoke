@@ -90,6 +90,10 @@ const SaveField SAVE_FIELDS[] = {
   { "frVday", SK_U32 },  // day of the last visit bonus
   { "frJrn", SK_BYTES }, // the swap journal: one open exchange at most (18 B)
   //
+  // ---- the arcade (ui_arcade.ino) -- keys go below this line
+  { "arcHi", SK_BYTES },  // best score per arcade game, 4 x uint16 (8 B)
+  { "arcDay", SK_U32 },   // day of the last daily arcade prize, +1 (0 = never)
+  //
 };
 const uint16_t SAVE_FIELD_COUNT = sizeof(SAVE_FIELDS) / sizeof(SAVE_FIELDS[0]);
 
