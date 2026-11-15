@@ -390,6 +390,23 @@ static void fxSpr(const FxMap &m, int cx, int cy, int s, const uint16_t *p, uint
   }
 }
 
+// The arcade's MEMORY cards and ECHO pads wear the same type sprites and
+// ramps (ui_arcade.ino) -- an accessor rather than a second copy of the art.
+void fxTypeIcon(uint8_t type, int cx, int cy, int s) {
+  if (type >= 18) type = 0;
+  if (s < 1) s = 1;
+  // not fxSpr(): that one clips to the battle scene above FX_CLIP_Y
+  const FxMap &m = *FX_PART[type];
+  const uint16_t *p = FX_PAL[type];
+  for (int r = 0; r < 12; r++)
+    for (int c = 0; c < 12; c++) {
+      const char *k = strchr("KDMLW", m[r][c]);
+      if (!k || !m[r][c]) continue;
+      gfx->fillRect(cx - 6 * s + c * s, cy - 6 * s + r * s, s, s, p[k - "KDMLW"]);
+    }
+}
+uint16_t fxTypeCol(uint8_t type, uint8_t k) { return FX_PAL[type < 18 ? type : 0][k < 5 ? k : 4]; }
+
 static void fxThick(float x0, float y0, float x1, float y1, float w, uint16_t col) {
   float dx = x1 - x0, dy = y1 - y0;
   float len = sqrtf(dx * dx + dy * dy);

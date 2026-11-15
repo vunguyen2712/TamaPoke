@@ -1057,6 +1057,57 @@ board; VISIT (the friend's species) when a visit pays its daily bonus.
 
 Design and the swap protocol: `docs/adventure-friends.md`.
 
+#### Arcade
+
+ADVENTURE > ARCADE (hub page 2, third row). Four short games played for fun,
+joy and the bond -- they train **no stat** (that is what the
+[Training games](#training-games) are for). The list shows each game with your
+best score; a star marks a game you have S-ranked. The row is greyed, and no
+game starts, while the pet is an **egg, asleep or in a ceremony**; if it falls
+asleep mid-game the session is banked and the list comes back.
+
+Shared with the training games: the **3-2-1 countdown** (1.8 s, nothing scores
+during it), the **COMBO** and its multiplier (**x1 below 5, x2 from 5, x3 from
+10** in a row), pop-ups, particles, the jolt and the rising blip. Every session
+ends on a **results card** (grade, stars, points, best, best combo, what the
+pet got); it goes back to the list by itself after 7 s, or on a tap after 0.7 s.
+
+**Leaving.** A tap on the top strip (y < 60) or a vertical swipe leaves a game
+and **banks it exactly as finishing would**; a horizontal swipe does too, except
+in BERRY CATCH, where dragging sideways is the control. Leaving the arcade from
+anywhere mid-game banks it as well. A session is paid once, however it ends.
+
+| game | length | rules |
+|---|---|---|
+| **BERRY CATCH** | 45 s, or 3 lives | Drag (or tap) to move the basket along the ground (0.9 px/ms; catches within 46 px). A berry is **1 + mult - 1**, a golden berry (8 %) **5 + mult - 1**. A berry that lands breaks the combo. From **6 s** rocks fall too (25 % of drops, 15 % faster): one in the basket costs a **life**, the combo and stuns the basket for 0.7 s; a rock that misses is harmless. A drop every 950 ms falling 0.16 px/ms at the start, every 420 ms at 0.34 px/ms by 45 s. |
+| **MEMORY** | 60 s | 4x4 cards, 8 pairs of type symbols (drawn with the move-effect sprites; 8 of 12 types with distinct shapes). Flip two: a pair stays up and is worth **10 x mult** (combo = pairs in a row). A mismatch shows for 0.7 s -- or until your next tap -- and turns back: no points lost, combo broken. Clearing the board is **+20** and deals a fresh one. |
+| **ECHO** | until the last life, at most 60 s | Four type pads -- FIRE top, WATER right, GRASS bottom, ELECTRIC left, each its own note (C E G C) -- play a sequence; repeat it. Each right pad **+1**, a cleared round **+its length**, and the next round adds one pad: clearing *n* rounds is **n x (n + 1)** points. A wrong pad, or **5 s** without a tap on your turn, costs one of **2 lives** and replays the same sequence. Playback: each pad lit 460 - 18 x length ms (at least 240), 140 ms apart. |
+| **POP-UP** | 45 s | Seven holes. Bop a critter for **1 + mult - 1**, a golden one (10 %, stays 3/4 as long) for **3 + mult - 1**. From **5 s** a BOMB can pop up (18 %): bopping it is **-5** points (never below 0) and the combo; left alone it fizzles. A critter that ducks back untapped, or a tap on an empty hole, breaks the combo. One critter at a time, **two from 8 s, three from 25 s**; each stays 1150 ms - 14 ms per hit (at least 550), a bomb 1300 ms. |
+
+**Grades** (points): 
+
+| game | B | A | S |
+|---|---|---|---|
+| BERRY CATCH | 25 | 50 | 80 |
+| MEMORY | 40 | 90 | 150 |
+| ECHO | 12 (3 rounds) | 30 (5) | 56 (7) |
+| POP-UP | 20 | 40 | 65 |
+
+**Rewards**, for a session that scored at least 1 point (a 0-point session pays
+and records nothing):
+
+- **Joy +4 / +8 / +12 / +16** for C / B / A / S, and **bond +1** (C, B) or
+  **+2** (A, S) -- the bond through the same daily cap of **20** as playing and
+  visits, so the card shows what the pet actually gained (0 once capped).
+- **-3 energy**.
+- A **PLAY** event, so the "play a minigame" tasks count arcade sessions.
+- **Once a day** (the care-streak day), the first **S** wins a small item:
+  an **ORAN BERRY** from BERRY CATCH or POP-UP, a **POKE BALL** from MEMORY or
+  ECHO. The list says whether today's prize is still to win.
+
+Bests and the prize day are saved (`arcHi`, 4 x 16-bit; `arcDay`) and are in
+the EXPORT backup.
+
 &nbsp;
 
 ## Hardware

@@ -280,6 +280,15 @@ natural end, leaving early and the results grade all ask those, so do not
 compute a gain anywhere else. `training_ui_test` covers it; numbers in README
 "Training games".
 
+**Arcade (v3.18)** lives in `ui_arcade.ino`, opened from the hub's ARCADE row
+(page 2). Four games for joy/bond, no stat. It borrows ui_train.ino's static
+helpers through forward declarations (the tab is concatenated before it) and
+the type sprites through `fxTypeIcon()`/`fxTypeCol()` in ui_movefx.ino. ONE end
+of a session, `arcFinish()` (idempotent): the clock, the last life, every way
+of leaving and the pet falling asleep all bank through it. ONE gate,
+`arcadeAllowed()`, for the hub row, `arcStart()` and the mid-game check.
+`arcade_ui_test` covers it.
+
 `tests/run.sh` no longer needs SDL (only the clickable emulator does);
 `SKIP_FW=1` skips its arduino-cli step.
 

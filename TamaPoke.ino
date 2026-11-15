@@ -128,6 +128,8 @@ bool daycareOpen = false;
 bool bagOpen = false;
 bool challengeOpen = false;
 bool friendsOpen = false;
+bool arcadeOpen = false;   // the ARCADE (ui_arcade.ino), from the hub's second page
+void arcadeTouchPeek(bool pressed, int16_t x, int16_t y);   // ui_arcade.ino: BERRY CATCH's drag
 uint8_t hubPage = 0;   // one page today; a seventh row pages instead of shrinking
 // Shared look of every Adventure screen (helpers in ui_hub.ino).
 #define FEAT_ROW_X 70
@@ -245,6 +247,7 @@ enum : uint8_t {
   SCR_HUB, SCR_WILD, SCR_TASKS, SCR_TOWER, SCR_DAYCARE, SCR_BAG,
   SCR_CHALLENGE, SCR_FRIENDS,
   SCR_HABITAT,   // the Pokedex habitat list (ui_habitat.ino), a sub-screen of the gallery
+  SCR_ARCADE,    // the arcade games and their picker (ui_arcade.ino)
   SCR_MAIN, SCR_COUNT
 };
 extern const char *const SCREEN_NAME[SCR_COUNT];   // const is internal linkage in C++
@@ -273,6 +276,7 @@ const char *const SCREEN_NAME[SCR_COUNT] = {
   "hub", "wild", "tasks", "tower", "daycare", "bag",
   "challenge", "friends",
   "habitat",
+  "arcade",
   "main"
 };
 
@@ -990,7 +994,7 @@ void loop() {
   // DMA del frame anterior (a 40-65 ms solapaba y causaba flashes negros; con
   // sprites grandes el dibujo tarda mas, asi que se deja colchon)
   // A move effect playing gets the minigames' faster frame rate too.
-  if (now - lastRender >= (uint32_t)((gameOpen || sackOpen || spdOpen ||
+  if (now - lastRender >= (uint32_t)((gameOpen || sackOpen || spdOpen || arcadeOpen ||
                                      (battleOpen && btlFxActive())) ? 85 : 100)) {
     lastRender = now;
     render();
@@ -1297,6 +1301,7 @@ void handleTouch() {
   gTouchIrq = false;
   int16_t x, y;
   bool pressed = touch.getPoint(&x, &y, 1) > 0;
+  arcadeTouchPeek(pressed, x, y);   // only reads: steers BERRY CATCH while a finger is down
 
   // saco de entrenamiento: cada toque cuenta al instante (aporrear rapido)
   if (sackOpen) {
