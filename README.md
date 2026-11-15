@@ -1,17 +1,25 @@
 # TamaPoke
 
-[![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://dylanpdao.github.io/TamaPoke/web/)
+[![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://vunguyen2712.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
 ![Firmware](https://img.shields.io/badge/firmware-v3.17-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
-[![Stars](https://img.shields.io/github/stars/DylanPDao/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/DylanPDao/TamaPoke/stargazers)
+[![Stars](https://img.shields.io/github/stars/vunguyen2712/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/vunguyen2712/TamaPoke/stargazers)
 
 A gen-1-Pokémon-inspired tamagotchi for the
 **Waveshare ESP32-S3-Touch-AMOLED-1.75** (round 466×466 AMOLED, CO5300 driver
-over QSPI, CST9217 touch over I2C). Raise any of the 386, evolve it, train it
-and complete them all (shinies included).
+over QSPI, CST9217 touch over I2C). Raise any of the 809 across seven regions,
+evolve it, train it, take it on adventures and complete them all (shinies
+included).
+
+> ### This fork: vunguyen2712/TamaPoke
+>
+> Forked from [**DylanPDao/TamaPoke**](https://github.com/DylanPDao/TamaPoke),
+> which is itself a fork of Quique Tortosa's original (below). Everything from
+> v3.12 to v3.17 is new here; see **[What's new in this fork](#whats-new-in-this-fork)**.
+> Install it from your browser with the **[web installer](https://vunguyen2712.github.io/TamaPoke/web/)**.
 
 > ### 🙏 This is a fork of [**socquique/TamaPoke**](https://github.com/socquique/TamaPoke) by **Quique Tortosa**
 >
@@ -27,7 +35,76 @@ and complete them all (shinies included).
 > PMD SpriteCollab (CC BY-NC, Pokémon © Nintendo/Game Freak), and the 3D case is
 > CC BY-NC-SA. See **[License](#license)** and **Credits**.
 
-🔴 **3D-printed Pokéball case + print profiles → [on MakerWorld](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)** · flash it in your browser → **[web installer](https://dylanpdao.github.io/TamaPoke/web/)**
+🔴 **3D-printed Pokéball case + print profiles → [on MakerWorld](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)** · flash it in your browser → **[web installer](https://vunguyen2712.github.io/TamaPoke/web/)**
+
+## What's new in this fork
+
+Six releases on top of DylanPDao's v3.11. The full rules and numbers for each
+are in the **Game manual** below.
+
+### v3.17: Water Gun, badge art, training games
+- **Water Gun and Hydro Pump** pour one solid, rippling jet of water, with foam
+  and a spray of drops where it hits.
+- **Badge sprites for every ladder win:**
+  - Alola gets 8 original badges.
+  - Every region gets 4 Elite Four emblems and a Champion crest, coloured by
+    region and by the trainer's type.
+  - They show on the win screen, the trainer card, the gym list and the
+    region picker. The badge count now reads out of 13.
+- **The training games are skill games now:**
+  - All three have a 3-2-1 countdown, a combo multiplier (x2 from 5 in a
+    row, x3 from 10) and a results card with an S/A/B/C grade.
+  - **Punching bag:** a power meter with a critical zone, a glowing weak spot,
+    and FEVER mode after 6 critical hits in a row.
+  - **Reaction test:** gold targets, bombs, two targets at once and moving
+    targets.
+  - **Ball game:** a golden ball, berry and star pickups, a second ball and
+    wind.
+  - The per-session cap on stat gains is unchanged.
+
+### v3.16: Move effects
+- Every move plays an animation in its type's colours, using 14 new pixel-art
+  sprites: beams, streams, lightning, falling rocks, earthquakes with screen
+  shake, claw slashes, jaws, psychic rings, stat arrows and more.
+- Super-effective hits, critical hits and draining moves each have their own
+  extra effect.
+- The two sides' moves play one after the other. The target flinches and its
+  HP drops when the blow lands, and the win screen waits for the final hit.
+
+### v3.15: Wild Pokémon fight back
+- Every opponent always has a damaging move. Before, low-level wild Pokémon
+  often had none.
+- Wild Pokémon attack 80% of the time.
+- Catching takes **one animated throw**: the ball spins, shakes up to three
+  times, then clicks shut or bursts open.
+
+### v3.14: More adventure
+- **Wild alerts** for rare, shiny or new Pokémon.
+- **Shiny chains**: shiny odds up to 1/16, or 1/8 with the Shiny Charm.
+- **Trainer rank** with ten titles that unlock avatars and home themes.
+- A **weekly gym challenge** with a rotating rule.
+- **Weather** drawn on the main screen.
+- A **habitat guide** in the Pokédex that says where and when to find what is
+  missing.
+- Seven **personalities**, each enjoying a different kind of care.
+- **Gifts and visits between two boards.**
+
+### v3.13: Adventure hub
+A new ADVENTURE menu with:
+- **Wild encounters** that depend on the day's weather and the time of day,
+  plus Poké, Great and Ultra Balls.
+- **Daily and weekly tasks.**
+- The **Battle Tower** (endless 3v3 at level 50).
+- **Gym rematches** with stronger teams.
+- A **daycare** that breeds an egg from two retired Pokémon.
+- **Held items and berries** that work in battle.
+- **Friendship evolutions**, and **Pokédex rewards** including the Oval and
+  Shiny Charms.
+
+### v3.12: Badge fix
+- Badges won outside Kanto were being credited to Kanto, or lost. They now
+  land on the right region.
+- Leaders now send out their own team, not Kanto's.
 
 ## Screens
 
@@ -133,8 +210,10 @@ progression, battery (AXP2101) and PWR button, anti-burn-in dimming,
 **sound (ES8311)**, **6 UI languages (English default)**, **starter choice on
 first run**, and a one-click **web installer**.
 
-Pending: wild encounters / battle (designed, not implemented), 3D case, soak
-test. See **Roadmap**.
+This fork adds the Adventure hub (wild encounters, tasks, Battle Tower, rematches,
+daycare, items), move effects, badge art for every ladder and skill-based
+training games; see **What's new in this fork**. Pending: soak test. See
+**Roadmap**.
 
 ## Game manual (the actual numbers)
 
