@@ -27,6 +27,7 @@ This project is not affiliated with or endorsed by any of those companies.
 | **All sprites** (idle, walk, sleep, eat, hurt, attack…) | [PMD Sprite Collaboration (PMDCollab/SpriteCollab)](https://github.com/PMDCollab/SpriteCollab) | Mystery-Dungeon-style animated sprites used everywhere: main screen, stat card, minigame, and the Pokédex grid + detail view |
 | **Base stats and learnsets** | [PokéAPI](https://pokeapi.co) | Real stats and level-up moves for all 386 |
 | **Gym badges** (all three regions) | [SteGriff/pokemon-badges](https://github.com/SteGriff/pokemon-badges) | `badges.h`, via `tools/gen_badges.py` — Stephen Griffiths 2011, **CC BY 3.0**, traced from Bulbapedia |
+| **Alola badges, Elite 4 / Champion emblems** | Original art for this project | `badges_extra.h`, via `tools/gen_badges_extra.py` — see "Gym badge artwork" below |
 | **Gym leader teams** (Johto, Hoenn) | [pret/pokecrystal](https://github.com/pret/pokecrystal), [pret/pokeemerald](https://github.com/pret/pokeemerald) | Verified against the games' own trainer tables by `tools/verify_rosters.py` — no art is taken, only the team data |
 
 The **SpriteCollab** sprites are the work of its community of artists under their
@@ -135,3 +136,23 @@ the column splitter used for the SVG sheets cannot cut it) and packs them at
 **If this project is ever published in a form that would trouble either artist,
 the honest fix is the one already recommended for the player avatars: ship
 `tools/gen_badges.py` and let each user fetch the art themselves.**
+
+### Alola, and every Elite Four / Champion emblem -- original art
+
+**Drawn for this project; not taken or traced from anything.** Alola has no gyms
+and so no canon badges (its ladder's gym slots are trial captains and kahunas),
+and no region's Elite Four or Champion has a badge in the games at all. So these
+are original:
+
+- Alola's eight: a family of sun medallions -- one shared frame (gold rays, a
+  coral ring) around a field in the slot's type colour, with a hand-drawn type
+  motif (sparkle, droplet, flame, leaf, bolt, heart, crescent, peaks).
+- The Elite Four and Champion of all seven regions: four emblem shapes (shield,
+  diamond, hexagon, eight-point star) and a champion crest (crown over a
+  laurelled medallion), the frame metal tinted per region and the jewel per the
+  trainer's type.
+
+They are generated, reproducibly, by `tools/gen_badges_extra.py` into
+`badges_extra.h` (pixel drawings and geometry in the script, no input files).
+They carry the project's own licence; the SteGriff CC BY 3.0 and MarillTachiquin
+credits above still apply to `badges.h` and are unaffected.
