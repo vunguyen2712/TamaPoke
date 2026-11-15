@@ -351,10 +351,18 @@ uint32_t btlFxQueue(uint8_t from, uint8_t mv, const TurnLog &lg, uint32_t at,
 
 // ---- drawing ------------------------------------------------------------------
 // Body centres and feet of the two creatures (you, foe) as btlSide draws them.
-static const int16_t FX_CX[2] = { 108, 330 };
-static const int16_t FX_CY[2] = { 192, 72 };
-static const int16_t FX_FEET[2] = { 244, 116 };
-#define FX_CLIP_Y 252        // the scene ends here: the menu band is below
+// Derived from the stand points in TamaPoke.ino (BTL_YOU_X/BTL_FOE_X and their
+// FEET rows), which also place the platforms -- so moving a creature moves its
+// effects with it. The body centre sits higher on you: your sprite is larger.
+static const int16_t FX_CX[2] = { BTL_YOU_X, BTL_FOE_X };
+static const int16_t FX_CY[2] = { BTL_YOU_FEET - 52, BTL_FOE_FEET - 44 };
+static const int16_t FX_FEET[2] = { BTL_YOU_FEET, BTL_FOE_FEET };
+#define FX_CLIP_Y BTL_SCENE_Y1   // the scene ends here: the menu band is below
+// For battle_ui_test: where the effects aim, to check against the platforms.
+void btlFxAnchor(uint8_t who, int16_t *cx, int16_t *cy, int16_t *feet) {
+  who = who ? 1 : 0;
+  *cx = FX_CX[who]; *cy = FX_CY[who]; *feet = FX_FEET[who];
+}
 
 static const int16_t FX_COS[16] = { 1000, 924, 707, 383, 0, -383, -707, -924,
                                     -1000, -924, -707, -383, 0, 383, 707, 924 };

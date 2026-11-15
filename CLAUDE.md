@@ -263,6 +263,16 @@ HABITAT list, header-only `habitat.h` reading wild.cpp), `adventure-persona.md`
 (traits; banked ones live in `PartyMon::spare`), `adventure-friends.md`
 (gift swap two-phase commit, visits; LINK_PROTO 3 -- older boards refuse).
 
+**Battle screen art (v3.18)** lives in `ui_battle.ino`: banner, HP cards and
+type pills, platforms, ground grid/vignette, command and move buttons, message
+box. It only draws; `btlUiRect()` is the one answer to "where is X drawn" for
+the drawing, the taps and `battle_ui_test`. The creatures' stand points are
+`BTL_YOU_X/BTL_FOE_X` + `*_FEET` in TamaPoke.ino, and `FX_CX/FX_CY/FX_FEET` in
+`ui_movefx.ino` are DERIVED from them -- move a creature there, never by editing
+the FX arrays. The tap cells (`BTL_CELL_*`) are unchanged since v3.17, so the
+dozen tests that tap the grid still aim right. Blends write the canvas through
+`gfx->getFramebuffer()` (the emulator stub has it too).
+
 **Move effects (v3.16)** live in `ui_movefx.ino`. `moveFxShape()` is the one
 answer to "what a move looks like". `btlFxQueue()` lays each action of a turn on
 ONE timeline: it schedules the lunge, the flinch (`btlHitFrom`/`btlHitUntil`), the
@@ -794,7 +804,8 @@ confirm their licence or replace them.
 
 0. ~~Fight UI polish~~ **done**. HP plates carry the `HP` label and your own
    side shows numeric HP (`btlSide`). The platform ellipse was dropped on the
-   user's call, not forgotten. The layout matches the mainline arrangement:
+   user's call, then brought back in v3.18 when the user asked for the
+   handheld look (`ui_battle.ino`). The layout matches the mainline arrangement:
    foe info top-left / sprite top-right, you bottom-right / bottom-left.
 1b. ~~Kanto badge art~~ **done**. `tools/gen_badges.py` needs `rsvg-convert`
    (`brew install librsvg`) and regenerates `badges.h` from the upstream SVG.
