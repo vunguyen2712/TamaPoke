@@ -24,14 +24,13 @@ static const char *const S_HUB_DAYCARE[LANG_COUNT] = { "GUARDERIA", "DAYCARE", "
 static const char *const S_HUB_BAG[LANG_COUNT]   = { "MOCHILA", "BAG", "SAC", "BEUTEL", "BORSA", "MOCHILA" };
 static const char *const S_HUB_CHALLENGE[LANG_COUNT] = { "RETO", "CHALLENGE", "DEFI", "HERAUSFORD.", "SFIDA", "DESAFIO" };
 static const char *const S_HUB_FRIENDS[LANG_COUNT] = { "AMIGOS", "FRIENDS", "AMIS", "FREUNDE", "AMICI", "AMIGOS" };
-static const char *const S_HUB_ARCADE[LANG_COUNT] = { "RECREATIVOS", "ARCADE", "ARCADE", "SPIELHALLE", "SALA GIOCHI", "FLIPERAMA" };
 static const char *const S_HUB_MORE[LANG_COUNT]  = { "MAS >", "MORE >", "PLUS >", "MEHR >", "ALTRO >", "MAIS >" };
 
 // The hub is a list of activities, HUB_PER_PAGE to a page, with BACK as the
 // last row of every page. A horizontal swipe pages; past either end it closes.
 // Adding an activity is one entry in each switch below -- never a smaller row.
 enum : uint8_t { HUB_WILD = 0, HUB_TASKS, HUB_TOWER, HUB_DAYCARE, HUB_BAG,
-                 HUB_CHALLENGE, HUB_FRIENDS, HUB_ARCADE, HUB_ACTIVITIES };
+                 HUB_CHALLENGE, HUB_FRIENDS, HUB_ACTIVITIES };
 #define HUB_PER_PAGE 5
 #define HUB_ROWS (HUB_PER_PAGE + 1)
 #define HUB_PAGES ((HUB_ACTIVITIES + HUB_PER_PAGE - 1) / HUB_PER_PAGE)
@@ -116,7 +115,6 @@ static void hubActLabel(uint8_t a, char *out, size_t n) {
     case HUB_BAG: bagHubLabel(out, n, TL(S_HUB_BAG)); break;
     case HUB_CHALLENGE: challengeHubLabel(out, n, TL(S_HUB_CHALLENGE)); break;
     case HUB_FRIENDS: friendsHubLabel(out, n, TL(S_HUB_FRIENDS)); break;
-    case HUB_ARCADE: arcadeHubLabel(out, n, TL(S_HUB_ARCADE)); break;
     default: out[0] = 0; break;
   }
 }
@@ -130,7 +128,6 @@ static bool hubActEnabled(uint8_t a) {
     case HUB_BAG: return bagHubEnabled();
     case HUB_CHALLENGE: return challengeHubEnabled();
     case HUB_FRIENDS: return friendsHubEnabled();
-    case HUB_ARCADE: return arcadeHubEnabled();
     default: return false;
   }
 }
@@ -144,7 +141,6 @@ static void hubActOpen(uint8_t a) {
     case HUB_BAG: bagOpen = true; bagOpened(); break;
     case HUB_CHALLENGE: challengeOpen = true; challengeOpened(); break;
     case HUB_FRIENDS: friendsOpen = true; friendsOpened(); break;
-    case HUB_ARCADE: arcadeOpen = true; arcadeOpened(); break;
   }
 }
 
@@ -268,7 +264,10 @@ void featSwipe(int dir) {
 void featSwipeV(int dir) {
   (void)dir;
   if (featScreen() == SCR_HUB) { hubOpen = false; return; }
-  if (featScreen() == SCR_ARCADE && arcadeSwipeV(dir)) return;   // a game backs out to the list
+  if (featScreen() == SCR_ARCADE) {   // a game backs out to the list, the list to TRAIN
+    if (!arcadeSwipeV(dir)) arcadeBack();
+    return;
+  }
   featBackToHub();
 }
 

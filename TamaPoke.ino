@@ -47,7 +47,7 @@
 
 // Version del firmware. Subir este numero en cada release (y manifest.json para
 // el instalador web). Se muestra en la pantalla de ajustes y por serie al arrancar.
-#define FW_VERSION "3.19"
+#define FW_VERSION "3.20"
 
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
   LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
@@ -142,7 +142,11 @@ bool daycareOpen = false;
 bool bagOpen = false;
 bool challengeOpen = false;
 bool friendsOpen = false;
-bool arcadeOpen = false;   // the ARCADE (ui_arcade.ino), from the hub's second page
+bool arcadeOpen = false;   // the ARCADE (ui_arcade.ino), from the TRAIN panel's 4th row
+const char *arcadeTitle();   // ui_arcade.ino: the row's label
+bool arcadeEnabled();        // ui_arcade.ino: not an egg, asleep or in a ceremony
+void arcadeOpenFromTrain();
+void arcadeGamesLine(char *out, size_t n);
 void arcadeTouchPeek(bool pressed, int16_t x, int16_t y);   // ui_arcade.ino: BERRY CATCH's drag
 uint8_t hubPage = 0;   // one page today; a seventh row pages instead of shrinking
 // Shared look of every Adventure screen (helpers in ui_hub.ino).
@@ -725,9 +729,10 @@ static inline bool btlCellHit(int i, int16_t x, int16_t y) {
          y >= BTL_HIT_Y0(i) && y <= BTL_HIT_Y1(i);
 }
 #define TRAIN_X 73
-#define TRAIN_Y 96
+#define TRAIN_Y 72     // up from 96 when the ARCADE row joined: four rows still clear the bezel
 #define TRAIN_W 320
-#define TRAIN_H 274
+#define TRAIN_H 330
+#define TRAIN_ROWS 4   // STRENGTH, SPEED, DEFENCE, ARCADE
 #define TRAIN_ROW_H 56
 #define TRAIN_ROW_GAP 8
 #define TRAIN_ROW_Y(i) (TRAIN_Y + 54 + (i) * (TRAIN_ROW_H + TRAIN_ROW_GAP))
@@ -2112,10 +2117,16 @@ void onTap(int16_t x, int16_t y) {
     bool inPanel = (x >= TRAIN_X && x <= TRAIN_X + TRAIN_W &&
                     y >= TRAIN_Y && y <= TRAIN_Y + TRAIN_H);
     if (!inPanel) { trainOpen = false; return; }   // tap outside = back to the pet
-    for (int i = 0; i < 3; i++) {   // all three train something now
+    for (int i = 0; i < TRAIN_ROWS; i++) {
       int ry = TRAIN_ROW_Y(i);
       if (x < TRAIN_X + 18 || x > TRAIN_X + TRAIN_W - 18) continue;
       if (y < ry || y > ry + TRAIN_ROW_H) continue;
+      if (i == 3) {              // the ARCADE: four games played for fun, no stat
+        if (!arcadeEnabled()) { sfxPlay(SFX_DENY); return; }
+        sfxPlay(SFX_TAP);
+        arcadeOpenFromTrain();
+        return;
+      }
       sfxPlay(SFX_TAP);
       trainOpen = false;
       if (i == 0) startSack();
@@ -5099,6 +5110,22 @@ void renderTrain() {
     int fw = (bw - 4) * pct / 100;
     if (fw > 0)
       gfx->fillRoundRect(bx + 2, by + 2, fw, bh - 4, 3, pct >= 100 ? UI_BAR_OK : UI_BAR_WARN);
+  }
+  {   // the ARCADE row: no bar (it trains nothing), the four games named under it
+    int y = TRAIN_ROW_Y(3);
+    bool ok = arcadeEnabled();
+    gfx->fillRoundRect(TRAIN_X + 18, y, TRAIN_W - 36, TRAIN_ROW_H, 12, ok ? C565(0xff, 0xf1, 0xc4) : UI_TRACK);
+    gfx->drawRoundRect(TRAIN_X + 18, y, TRAIN_W - 36, TRAIN_ROW_H, 12, UI_INK);
+    gfx->setTextColor(ok ? UI_INK : 0x8410);
+    gfx->setTextSize(2);
+    gfx->setCursor(TRAIN_X + 32, y + 10);
+    gfx->print(arcadeTitle());
+    gfx->setTextColor(0x8410);
+    gfx->setTextSize(1);
+    gfx->setCursor(TRAIN_X + 32, y + 36);
+    char games[48];
+    arcadeGamesLine(games, sizeof(games));
+    gfx->print(games);
   }
 
   gfx->setTextColor(UI_INK);
