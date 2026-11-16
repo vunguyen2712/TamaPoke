@@ -69,8 +69,12 @@ static const char *const S_ARC_TURN[LANG_COUNT] = { "TU TURNO", "YOUR TURN", "A 
 static const char *const S_ARC_ROUND[LANG_COUNT] = { "RONDA %u", "ROUND %u", "MANCHE %u", "RUNDE %u", "TURNO %u", "RODADA %u" };
 static const char *const S_ARC_REWARD[LANG_COUNT] = { "ALEGRIA +%u VINC +%u", "JOY +%u BOND +%u", "JOIE +%u LIEN +%u", "FREUDE +%u BAND +%u", "GIOIA +%u LEGAME +%u", "ALEGRIA +%u LACO +%u" };
 static const char *const S_ARC_PRIZE[LANG_COUNT] = { "PREMIO: %s!", "PRIZE: %s!", "PRIX: %s!", "PREIS: %s!", "PREMIO: %s!", "PREMIO: %s!" };
-static const char *const S_ARC_PRIZE_READY[LANG_COUNT] = { "PREMIO DIARIO: RANGO S", "DAILY PRIZE: GET AN S", "PRIX DU JOUR: RANG S", "TAGESPREIS: RANG S", "PREMIO: OTTIENI UNA S", "PREMIO DIARIO: NOTA S" };
-static const char *const S_ARC_PRIZE_DONE[LANG_COUNT] = { "PREMIO DE HOY: YA", "PRIZE CLAIMED TODAY", "PRIX DEJA GAGNE", "PREIS HEUTE ERHALTEN", "PREMIO GIA PRESO", "PREMIO JA GANHO" };
+static const char *const S_ARC_PRIZE_READY[LANG_COUNT] = { "RANGO A/S: PREMIOS", "RANK A OR S: PRIZES", "RANG A/S: DES PRIX", "RANG A/S: PREISE", "GRADO A/S: PREMI", "NOTA A/S: PREMIOS" };
+static const char *const S_ARC_PRIZE_DONE[LANG_COUNT] = { "PREMIOS DE HOY: YA", "ALL PRIZES TODAY: WON", "PRIX DU JOUR: GAGNES", "ALLE PREISE ERHALTEN", "PREMI DI OGGI: PRESI", "PREMIOS DE HOJE: JA" };
+static const char *const S_ARC_FIRST[LANG_COUNT] = { "1ER S: %s!", "FIRST S: %s!", "1ER S: %s!", "ERSTES S: %s!", "PRIMA S: %s!", "1O S: %s!" };
+static const char *const S_ARC_ALLS[LANG_COUNT] = { "4 S: %s x%u!", "ALL 4 S: %s x%u!", "4 S: %s x%u!", "4 S: %s x%u!", "4 S: %s x%u!", "4 S: %s x%u!" };
+static const char *const S_ARC_TODAY_S[LANG_COUNT] = { "HOY: S", "TODAY: S", "AUJ.: S", "HEUTE: S", "OGGI: S", "HOJE: S" };
+static const char *const S_ARC_TODAY_A[LANG_COUNT] = { "HOY: A", "TODAY: A", "AUJ.: A", "HEUTE: A", "OGGI: A", "HOJE: A" };
 static const char *const S_ARC_TAPON[LANG_COUNT] = { "TOCA PARA SEGUIR", "TAP TO GO ON", "TOUCHE POUR SUIVRE", "TIPPEN: WEITER", "TOCCA: AVANTI", "TOQUE P/ SEGUIR" };
 static const char *const S_ARC_CLEAR[LANG_COUNT] = { "TABLERO!", "BOARD CLEAR!", "GRILLE OK!", "GESCHAFFT!", "FATTO!", "LIMPO!" };
 static const char *const S_ARC_OUCH[LANG_COUNT] = { "AY!", "OUCH!", "AIE!", "AUA!", "AHI!", "AI!" };
@@ -93,8 +97,16 @@ static const uint16_t ARC_GRADE_AT[ARC_GAMES][3] = {
   { 12, 30, 56 },     // echo  (n rounds cleared = n*(n+1): 3, 5, 7 rounds)
   { 20, 40, 65 },     // pop-up
 };
-// the once-a-day prize for an S, per game (existing items only)
-static const uint8_t ARC_PRIZE_ITEM[ARC_GAMES] = { ITEM_ORAN_BERRY, ITEM_POKEBALL, ITEM_POKEBALL, ITEM_ORAN_BERRY };
+// Rank prizes (v3.21). Each game pays once a day for an A and once more for an
+// S -- an S first pays the S prize, and an A after it pays nothing more that
+// day. The FIRST S ever in a game adds a held item, and S-ranking all four
+// adds ULTRA BALLs, once each. Existing items only.
+static const uint8_t ARC_PRIZE_A[ARC_GAMES] = { ITEM_ORAN_BERRY, ITEM_POKEBALL, ITEM_POKEBALL, ITEM_ORAN_BERRY };
+static const uint8_t ARC_PRIZE_S[ARC_GAMES] = { ITEM_SITRUS_BERRY, ITEM_GREATBALL, ITEM_GREATBALL, ITEM_SITRUS_BERRY };
+static const uint8_t ARC_FIRST_S[ARC_GAMES] = { ITEM_LEFTOVERS, ITEM_QUICK_CLAW, ITEM_FOCUS_SASH, ITEM_LUM_BERRY };
+#define ARC_ALLS_ITEM ITEM_ULTRABALL
+#define ARC_ALLS_N 3
+#define ARC_ALLS_BIT 0x10        // arcFirstS: the all-four bonus has been paid
 static const uint16_t ARC_GAME_COL[ARC_GAMES] = { C565(0xd8, 0x3c, 0x4a), C565(0x2a, 0x7a, 0xd0), C565(0x9a, 0x4a, 0xd8), C565(0x9a, 0x6a, 0x3a) };
 
 static const char *const *arcName(uint8_t g) {
@@ -111,13 +123,18 @@ uint16_t arcPts = 0;
 uint8_t arcGrade = 0;            // 0 C, 1 B, 2 A, 3 S
 bool arcNewHi = false;
 uint8_t arcJoyGot = 0, arcBondGot = 0, arcPrizeGot = 0;   // what the session paid
+uint8_t arcFirstGot = 0;         // the first-S held item this session paid, or 0
+bool arcAllSGot = false;         // this session completed the four S ranks
 uint16_t arcBest[ARC_GAMES] = { 0 };
-uint32_t arcPrizeDay = 0;        // day+1 of the last prize, 0 = never
+uint32_t arcPrizeDay = 0;        // the day (+1) arcPaid counts for, 0 = never
+uint8_t arcPaid[ARC_GAMES] = { 0 };   // grade already paid today per game: 0, 2 (A) or 3 (S)
+uint8_t arcFirstS = 0;           // bit g: game g's first-S item paid; ARC_ALLS_BIT: the all-four bonus
 uint16_t arcSessions = 0;        // sessions banked since boot (tests)
 static uint32_t arcLastFrame = 0;
 static uint8_t arcStarsShown = 0;
 
-// ---- persistence: "arcHi" 4 x uint16 bests, "arcDay" the prize day (+1)
+// ---- persistence: "arcHi" 4 x uint16 bests, "arcDay" the prize day (+1),
+// "arcRw" what today's prizes and the one-time bonuses have paid (5 B)
 static Preferences arcPrefs;
 static bool arcPrefsOpen = false;
 void arcLoad() {
@@ -125,16 +142,34 @@ void arcLoad() {
   memset(arcBest, 0, sizeof(arcBest));
   if (arcPrefs.getBytesLength("arcHi") == sizeof(arcBest)) arcPrefs.getBytes("arcHi", arcBest, sizeof(arcBest));
   arcPrizeDay = arcPrefs.getUInt("arcDay", 0);
+  uint8_t rw[ARC_GAMES + 1] = { 0 };
+  if (arcPrefs.getBytesLength("arcRw") == sizeof(rw)) arcPrefs.getBytes("arcRw", rw, sizeof(rw));
+  memcpy(arcPaid, rw, ARC_GAMES);
+  arcFirstS = rw[ARC_GAMES];
 }
 static void arcSave() {
   if (!arcPrefsOpen) { arcPrefs.begin("tamapoke", false); arcPrefsOpen = true; }
   arcPrefs.putBytes("arcHi", arcBest, sizeof(arcBest));
   arcPrefs.putUInt("arcDay", arcPrizeDay);
+  uint8_t rw[ARC_GAMES + 1];
+  memcpy(rw, arcPaid, ARC_GAMES);
+  rw[ARC_GAMES] = arcFirstS;
+  arcPrefs.putBytes("arcRw", rw, sizeof(rw));
 }
 
 // THE gate, for the hub row and every start alike.
 bool arcadeAllowed() { return !pet.isEgg() && !pet.sleeping && !pet.ceremony; }
-bool arcadePrizeToday() { return arcPrizeDay == pet.currentDay() + 1; }
+// arcPaid belongs to arcPrizeDay; a new day starts it over.
+static void arcPaidRoll() {
+  uint32_t d = pet.currentDay() + 1;
+  if (arcPrizeDay != d) { memset(arcPaid, 0, sizeof(arcPaid)); arcPrizeDay = d; }
+}
+uint8_t arcPaidToday(uint8_t g) { return (g < ARC_GAMES && arcPrizeDay == pet.currentDay() + 1) ? arcPaid[g] : 0; }
+// Every game's S prize already won today: nothing left to win until tomorrow.
+bool arcadePrizeToday() {
+  for (uint8_t g = 0; g < ARC_GAMES; g++) if (arcPaidToday(g) < 3) return false;
+  return true;
+}
 
 uint8_t arcGradeOf(uint8_t g, uint16_t pts) {
   if (g >= ARC_GAMES) return 0;
@@ -156,20 +191,32 @@ void arcFinish() {
   arcGrade = arcGradeOf(arcGame, arcPts);
   arcNewHi = arcPts > arcBest[arcGame];
   if (arcNewHi) arcBest[arcGame] = arcPts;
-  arcJoyGot = arcBondGot = arcPrizeGot = 0;
+  arcJoyGot = arcBondGot = arcPrizeGot = arcFirstGot = 0;
+  arcAllSGot = false;
   if (arcPts > 0) {
     pet.energy = pet.energy > ARC_ENERGY ? pet.energy - ARC_ENERGY : 0;
     arcJoyGot = arcJoyFor(arcGrade);
     arcBondGot = pet.friendVisit(arcJoyGot, arcBondFor(arcGrade));   // joy, capped bond, heart, save
-    if (arcGrade == 3 && !arcadePrizeToday()) {
-      uint8_t it = ARC_PRIZE_ITEM[arcGame];
-      if (bag.add(it)) { arcPrizeGot = it; arcPrizeDay = pet.currentDay() + 1; }
+    // today's rank prize: an A once, an S once (better), per game
+    arcPaidRoll();
+    if (arcGrade >= 2 && arcPaid[arcGame] < arcGrade) {
+      uint8_t it = arcGrade == 3 ? ARC_PRIZE_S[arcGame] : ARC_PRIZE_A[arcGame];
+      if (bag.add(it)) { arcPrizeGot = it; arcPaid[arcGame] = arcGrade; }
+    }
+    // the one-time bonuses: this game's first S, then all four
+    if (arcGrade == 3 && !(arcFirstS & (1 << arcGame)) && bag.add(ARC_FIRST_S[arcGame])) {
+      arcFirstGot = ARC_FIRST_S[arcGame];
+      arcFirstS |= (uint8_t)(1 << arcGame);
+    }
+    if ((arcFirstS & 0x0F) == 0x0F && !(arcFirstS & ARC_ALLS_BIT) && bag.add(ARC_ALLS_ITEM, ARC_ALLS_N)) {
+      arcAllSGot = true;
+      arcFirstS |= ARC_ALLS_BIT;
     }
     gameEvent(EV_PLAY, (int16_t)(arcPts > 32767 ? 32767 : arcPts));
   }
   arcSave();
   arcSessions++;
-  sfxPlay(arcNewHi && arcPts ? SFX_MEDAL : SFX_LEVEL);
+  sfxPlay((arcNewHi && arcPts) || arcFirstGot || arcAllSGot ? SFX_MEDAL : SFX_LEVEL);
   if (arcGrade >= 2) trnBurst(CX, 140, UI_BAR_WARN, 16, 7.0f);
 }
 
@@ -1077,6 +1124,14 @@ static void renderArcadePicker(uint32_t now) {
     gfx->print(b);
     if (arcBest[i] && arcGradeOf(i, arcBest[i]) == 3)       // a game you have S-ranked wears a star
       trnStar(ARC_ROW_X + ARC_ROW_W - 26, y + ARC_ROW_H / 2, 13, UI_BAR_WARN);
+    uint8_t paid = arcPaidToday(i);                         // which of today's prizes it has paid
+    if (paid) {
+      const char *t = TL(paid == 3 ? S_ARC_TODAY_S : S_ARC_TODAY_A);
+      gfx->setTextSize(1);
+      gfx->setTextColor(paid == 3 ? C565(0x1a, 0x8a, 0x3a) : 0x8410);
+      gfx->setCursor(ARC_ROW_X + ARC_ROW_W - 48 - (int)strlen(t) * 6, y + ARC_ROW_H - 14);
+      gfx->print(t);
+    }
   }
   featLine(358, TL(arcadePrizeToday() ? S_ARC_PRIZE_DONE : S_ARC_PRIZE_READY), arcadePrizeToday() ? 0x8410 : C565(0xc0, 0x80, 0x10));
   featBackPill();
@@ -1111,8 +1166,12 @@ static void renderArcResults(uint32_t now) {
   trnText(b, CX, py + 144, 3, UI_INK);
   if (arcNewHi && arcPts) trnText(TL(S_ARC_NEW), CX, py + 176, 2, ((now / 250) & 1) ? UI_BAR_WARN : UI_BAR_BAD);
   else { snprintf(b, sizeof(b), TL(S_ARC_BEST), arcBest[arcGame < ARC_GAMES ? arcGame : 0]); trnText(b, CX, py + 176, 2, UI_INK); }
-  if (trnBestCombo >= 2) { snprintf(b, sizeof(b), TL(S_TRN_COMBO), trnBestCombo); trnText(b, CX, py + 200, 2, 0x8410); }
-  if (arcJoyGot) { snprintf(b, sizeof(b), TL(S_ARC_REWARD), arcJoyGot, arcBondGot); trnText(b, CX, py + 224, 2, C565(0xd4, 0x52, 0x7e)); }
+  // A one-time bonus is rarer than the combo or the joy, so it takes their line.
+  uint16_t gold = ((now / 200) & 1) ? UI_BAR_WARN : C565(0xc0, 0x80, 0x10);
+  if (arcFirstGot) { snprintf(b, sizeof(b), TL(S_ARC_FIRST), ITEM_TBL[arcFirstGot].name); trnText(b, CX, py + 200, 2, gold); }
+  else if (trnBestCombo >= 2) { snprintf(b, sizeof(b), TL(S_TRN_COMBO), trnBestCombo); trnText(b, CX, py + 200, 2, 0x8410); }
+  if (arcAllSGot) { snprintf(b, sizeof(b), TL(S_ARC_ALLS), ITEM_TBL[ARC_ALLS_ITEM].name, (unsigned)ARC_ALLS_N); trnText(b, CX, py + 224, 2, gold); }
+  else if (arcJoyGot) { snprintf(b, sizeof(b), TL(S_ARC_REWARD), arcJoyGot, arcBondGot); trnText(b, CX, py + 224, 2, C565(0xd4, 0x52, 0x7e)); }
   if (arcPrizeGot) {
     snprintf(b, sizeof(b), TL(S_ARC_PRIZE), ITEM_TBL[arcPrizeGot].name);
     trnText(b, CX, py + 248, 2, ((now / 200) & 1) ? UI_BAR_OK : C565(0x1a, 0x8a, 0x3a));

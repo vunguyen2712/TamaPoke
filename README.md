@@ -3,7 +3,7 @@
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://vunguyen2712.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v3.20-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v3.21-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
 [![Stars](https://img.shields.io/github/stars/vunguyen2712/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/vunguyen2712/TamaPoke/stargazers)
@@ -18,7 +18,7 @@ included).
 >
 > Forked from [**DylanPDao/TamaPoke**](https://github.com/DylanPDao/TamaPoke),
 > which is itself a fork of Quique Tortosa's original (below). Everything from
-> v3.12 to v3.20 is new here; see **[What's new in this fork](#whats-new-in-this-fork)**.
+> v3.12 to v3.21 is new here; see **[What's new in this fork](#whats-new-in-this-fork)**.
 > Install it from your browser with the **[web installer](https://vunguyen2712.github.io/TamaPoke/web/)**.
 
 > ### 🙏 This is a fork of [**socquique/TamaPoke**](https://github.com/socquique/TamaPoke) by **Quique Tortosa**
@@ -39,8 +39,15 @@ included).
 
 ## What's new in this fork
 
-Nine releases on top of DylanPDao's v3.11. The full rules and numbers for each
+Ten releases on top of DylanPDao's v3.11. The full rules and numbers for each
 are in the **Game manual** below.
+
+### v3.21: Arcade rank prizes
+- Every Arcade game now pays an item **once a day for an A** and **once for an
+  S** (better), instead of one prize a day for the first S anywhere.
+- The **first S ever** in each game adds a held item (LEFTOVERS, QUICK CLAW,
+  FOCUS SASH, LUM BERRY), and S-ranking all four adds **3 ULTRA BALLs**.
+- The games list marks what each game has paid today.
 
 ### v3.20: The Arcade moves to the training menu
 - The four mini games (BERRY CATCH, MEMORY, ECHO, POP-UP) are now the **ARCADE**
@@ -1215,12 +1222,22 @@ and records nothing):
   visits, so the card shows what the pet actually gained (0 once capped).
 - **-3 energy**.
 - A **PLAY** event, so the "play a minigame" tasks count arcade sessions.
-- **Once a day** (the care-streak day), the first **S** wins a small item:
-  an **ORAN BERRY** from BERRY CATCH or POP-UP, a **POKE BALL** from MEMORY or
-  ECHO. The list says whether today's prize is still to win.
+- **Rank prizes, every day, per game** (the care-streak day). Each game pays
+  once for an **A** and once for an **S**; an S first pays the S prize, and an A
+  after it pays nothing more that day. The list shows TODAY: A / TODAY: S on a
+  game that has paid.
 
-Bests and the prize day are saved (`arcHi`, 4 x 16-bit; `arcDay`) and are in
-the EXPORT backup.
+  | game | A | S | first S ever (once) |
+  |---|---|---|---|
+  | BERRY CATCH | ORAN BERRY | SITRUS BERRY | LEFTOVERS |
+  | MEMORY | POKE BALL | GREAT BALL | QUICK CLAW |
+  | ECHO | POKE BALL | GREAT BALL | FOCUS SASH |
+  | POP-UP | ORAN BERRY | SITRUS BERRY | LUM BERRY |
+
+- **All four S-ranked** (each game's first S paid): **3 ULTRA BALLs**, once.
+
+Bests, today's prizes and the one-time bonuses are saved (`arcHi`, 4 x 16-bit;
+`arcDay`; `arcRw`, 5 B) and are in the EXPORT backup.
 
 &nbsp;
 
