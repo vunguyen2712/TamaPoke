@@ -12,6 +12,7 @@
 #include "party.h"
 #include "save.h"
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 #include <unistd.h>
@@ -29,8 +30,11 @@ String FakeSerial::readStringUntil(char){
 static bool gRestarted = false;
 void FakeESP::restart(){ gRestarted = true; }   // not exit(): the test continues
 
-void setup(); void render(); void handleSerial();
+void setup(); void render(); void handleSerial(); void handleTouch();
+uint8_t uiCurrentScreen(); extern const char *const SCREEN_NAME[];
+extern bool menuOpen;
 extern Pet pet;
+extern Arduino_Canvas *gfx;
 
 static int bad=0;
 static void ck(bool ok,const char*w){printf("%s  %s\n",ok?"PASS":"FAIL",w); if(!ok)bad++;}
@@ -181,6 +185,31 @@ int main(){
     runConsole({"TR -5 999 20"});
     ck(pet.trAtk == 0 && pet.trDef == pet.trMaxDef() && pet.trSpe == 20,
        "nonsense arguments clamp instead of wrapping");
+  }
+
+  // ---- the hardware test hooks: TAP plays a real gesture through
+  // handleTouch(), and SHOT streams exactly the framebuffer it announces
+  {
+    while (!pet.hasLearnOffer() ? false : (pet.declineLearn(), true)) {}
+    menuOpen = false; render();
+    ck(!strcmp(SCREEN_NAME[uiCurrentScreen()], "main"), "starts on the main screen");
+    runConsole({"TAP 233 60"});
+    for (int i = 0; i < 20; i++) { uint32_t t = millis(); while (millis() - t < 25) {} handleTouch(); }
+    ck(!strcmp(SCREEN_NAME[uiCurrentScreen()], "menu"), "TAP on the name band opens the menu");
+    menuOpen = false; render();
+    runConsole({"DRAG 233 200 233 210 100"});   // a 10 px wobble is still a tap, on the pet
+    for (int i = 0; i < 20; i++) { uint32_t t = millis(); while (millis() - t < 25) {} handleTouch(); }
+    ck(!strcmp(SCREEN_NAME[uiCurrentScreen()], "main"), "and a tap elsewhere does not");
+    std::string shot = runConsole({"SHOT"});
+    size_t nl = shot.find('\n');
+    int w = 0, h = 0; unsigned n = 0;
+    sscanf(shot.c_str(), "SHOT %d %d %u", &w, &h, &n);
+    ck(w == 466 && h == 466 && n == 466u * 466u * 2u, "SHOT announces the whole panel");
+    ck(nl != std::string::npos && shot.size() >= nl + 1 + n &&
+       !memcmp(shot.data() + nl + 1, gfx->getFramebuffer(), n),
+       "and sends exactly the framebuffer, byte for byte");
+    std::string perf = runConsole({"PERF"});
+    ck(perf.find("loopgap_max") != std::string::npos, "PERF reports");
   }
 
   printf("%s\n", bad?"FAILURES":"all good");
