@@ -92,7 +92,8 @@ const SaveField SAVE_FIELDS[] = {
   //
   // ---- the arcade (ui_arcade.ino) -- keys go below this line
   { "arcHi", SK_BYTES },  // best score per arcade game, 4 x uint16 (8 B)
-  { "arcDay", SK_U32 },   // day of the last daily arcade prize, +1 (0 = never)
+  { "arcDay", SK_U32 },   // the day (+1) the arcade's daily prizes count for (0 = never)
+  { "arcRw", SK_BYTES },  // per game the grade paid today (A=2, S=3), then the first-S bitmask (5 B)
   //
 };
 const uint16_t SAVE_FIELD_COUNT = sizeof(SAVE_FIELDS) / sizeof(SAVE_FIELDS[0]);
