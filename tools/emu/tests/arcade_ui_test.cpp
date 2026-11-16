@@ -30,7 +30,7 @@ extern Pet pet;
 extern Arduino_Canvas *gfx;
 extern const char *const SCREEN_NAME[];
 uint8_t uiCurrentScreen();
-extern bool hubOpen, arcadeOpen; extern uint8_t hubPage;
+extern bool hubOpen, arcadeOpen, trainOpen; extern uint8_t hubPage;
 void featBackToHub();
 // shared training helpers the arcade borrows
 extern uint32_t trnGoAt; extern uint16_t trnCombo, trnBestCombo;
@@ -106,7 +106,7 @@ static void memXY(int i, int &x, int &y) {
 }
 static int memPartner(int i) { for (int k = 0; k < 16; k++) if (k != i && memType[k] == memType[i]) return k; return -1; }
 static int memOther(int i) { for (int k = 0; k < 16; k++) if (memType[k] != memType[i] && memState[k] == 0) return k; return -1; }
-static void openArcade() { featBackToHub(); hubOpen = false; arcadeOpen = true; arcGame = NONE; arcOver = false; arcLoad(); }
+static void openArcade() { featBackToHub(); hubOpen = false; trainOpen = false; arcadeOpen = true; arcGame = NONE; arcOver = false; arcLoad(); }
 
 int main() {
   setup(); for (int i = 0; i < 4; i++) loop();
@@ -128,20 +128,33 @@ int main() {
   }
 
   // =================================================================== ENTRY
-  printf("-- the hub row\n");
+  printf("-- the TRAIN panel's row\n");
   hubOpen = true; hubPage = 1;
   ck(flushes(), "hub page 2 flushes");
-  onTap(233, 88 + 2 * 50 + 22);          // FEAT_ROW_Y(2): third row of page 2
-  ck(arcadeOpen && onScreen("arcade"), "the hub's ARCADE row (page 2, third) opens the arcade");
+  onTap(233, 88 + 2 * 50 + 22);          // where ARCADE used to be: page 2, third row
+  ck(!arcadeOpen, "the Adventure hub no longer has an ARCADE row");
+  hubOpen = false; hubPage = 0;
+  trainOpen = true;
+  ck(flushes(), "the training menu with its ARCADE row flushes");
+  onTap(233, 126 + 3 * 64 + 28);         // TRAIN_ROW_Y(3): the fourth row
+  ck(arcadeOpen && !trainOpen && onScreen("arcade"), "TRAIN's fourth row (ARCADE) opens the arcade");
   ck(arcGame == NONE && flushes(), "it opens on the picker, which flushes");
   ck(arcRowAt(233, 88 + 20) == 0 && arcRowAt(233, 88 + 3 * 66 + 20) == 3 && arcRowAt(233, 30) == -1, "picker rows map to the four games");
   onSwipe(1);
-  ck(!arcadeOpen && hubOpen, "a horizontal swipe on the picker goes back to the hub");
+  ck(!arcadeOpen && trainOpen && !hubOpen, "a horizontal swipe on the picker goes back to the training menu");
+  onTap(233, 126 + 3 * 64 + 28);
+  onSwipeV(1);
+  ck(!arcadeOpen && trainOpen, "a vertical swipe on the picker goes back to the training menu");
+  onTap(233, 126 + 3 * 64 + 28);
+  onTap(233, 394);                       // FEAT_BACK pill
+  ck(!arcadeOpen && trainOpen, "the picker's BACK pill goes back to the training menu");
+  trainOpen = false;
   // guards: no game while asleep / an egg / a ceremony -- the row AND the start
   pet.sleeping = true;
-  hubOpen = true; hubPage = 1; render();
-  onTap(233, 88 + 2 * 50 + 22);
-  ck(!arcadeOpen, "asleep: the hub row refuses to open the arcade");
+  trainOpen = true; render();
+  onTap(233, 126 + 3 * 64 + 28);
+  ck(!arcadeOpen, "asleep: the TRAIN row refuses to open the arcade");
+  trainOpen = false;
   arcadeOpen = true; hubOpen = false; arcGame = NONE;
   arcStart(G_CATCH);
   ck(arcGame == NONE, "asleep: arcStart refuses too (the twin path)");
@@ -294,7 +307,7 @@ int main() {
   ck(pet.joy > joy0 && arcadeOpen && onScreen("arcade"), "it paid joy and went back to the picker (not the hub)");
   onSwipeV(1);
   ck(arcGame == NONE && arcSessions == s0 + 1, "a second swipe pays nothing more");
-  ck(!arcadeOpen && hubOpen, "...and backs out to the hub");
+  ck(!arcadeOpen && trainOpen && !hubOpen, "...and backs out to the training menu");
   openArcade();
 
   // =================================================================== ECHO
@@ -454,8 +467,8 @@ int main() {
   }
   // reopening the screen re-reads NVS (a WIPE or IMPORT would not leave stale bests)
   arcBest[G_CATCH] = 9999;
-  arcadeOpen = false; hubOpen = true; hubPage = 1;
-  onTap(233, 88 + 2 * 50 + 22);
+  arcadeOpen = false; trainOpen = true;
+  onTap(233, 126 + 3 * 64 + 28);
   ck(arcadeOpen && arcBest[G_CATCH] == want[G_CATCH], "opening the arcade reloads the bests");
   ck(flushes(), "the picker with bests flushes");
 

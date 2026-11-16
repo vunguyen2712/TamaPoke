@@ -3,7 +3,7 @@
 [![Flash in browser](https://img.shields.io/badge/flash-in%20browser-FF6B00?logo=googlechrome&logoColor=white)](https://vunguyen2712.github.io/TamaPoke/web/)
 [![MakerWorld](https://img.shields.io/badge/MakerWorld-3D%20case-00AE42?logo=bambulab&logoColor=white)](https://makerworld.com/es/models/2937822-tamapoke-a-pokemon-pokeball-tamagotchi)
 ![Board](https://img.shields.io/badge/board-ESP32--S3%20round%20AMOLED-E7352C?logo=espressif&logoColor=white)
-![Firmware](https://img.shields.io/badge/firmware-v3.19-8A2BE2)
+![Firmware](https://img.shields.io/badge/firmware-v3.20-8A2BE2)
 ![Code](https://img.shields.io/badge/code-MIT-blue)
 ![Languages](https://img.shields.io/badge/languages-6-FFCB05)
 [![Stars](https://img.shields.io/github/stars/vunguyen2712/TamaPoke?style=flat&logo=github&color=yellow)](https://github.com/vunguyen2712/TamaPoke/stargazers)
@@ -18,7 +18,7 @@ included).
 >
 > Forked from [**DylanPDao/TamaPoke**](https://github.com/DylanPDao/TamaPoke),
 > which is itself a fork of Quique Tortosa's original (below). Everything from
-> v3.12 to v3.19 is new here; see **[What's new in this fork](#whats-new-in-this-fork)**.
+> v3.12 to v3.20 is new here; see **[What's new in this fork](#whats-new-in-this-fork)**.
 > Install it from your browser with the **[web installer](https://vunguyen2712.github.io/TamaPoke/web/)**.
 
 > ### 🙏 This is a fork of [**socquique/TamaPoke**](https://github.com/socquique/TamaPoke) by **Quique Tortosa**
@@ -39,8 +39,14 @@ included).
 
 ## What's new in this fork
 
-Eight releases on top of DylanPDao's v3.11. The full rules and numbers for each
+Nine releases on top of DylanPDao's v3.11. The full rules and numbers for each
 are in the **Game manual** below.
+
+### v3.20: The Arcade moves to the training menu
+- The four mini games (BERRY CATCH, MEMORY, ECHO, POP-UP) are now the **ARCADE**
+  row, the fourth row of the training menu (the **dumbbell** button), under
+  STRENGTH, SPEED and DEFENCE. The Adventure hub no longer has an ARCADE row.
+- BACK, or a swipe, on the games list returns to the training menu.
 
 ### v3.19: Quick taps register
 - The board draws a frame in 75 to 95 ms, and 45 ms of that is pushing it to
@@ -68,7 +74,7 @@ are in the **Game manual** below.
   - Creatures stand on white platforms over a floor with depth.
   - Colour-coded FIGHT, POKEMON and RUN buttons, with moves coloured by type.
   - A new win screen with a sunburst behind the badge.
-- **Arcade** (Adventure, page 2): four new mini games.
+- **Arcade**: four new mini games (in the training menu since v3.20).
   - **Berry Catch:** catch berries in a basket, dodge rocks.
   - **Memory:** match pairs of type symbols.
   - **Echo:** repeat a growing sequence on four type pads.
@@ -341,7 +347,8 @@ While **awake**, per minute:
 ### Training games
 
 Open them from the **dumbbell** icon (the training menu): **STRENGTH** → the bag,
-**SPEED** → the reaction test, **DEFENSE** → the ball game. All three share:
+**SPEED** → the reaction test, **DEFENSE** → the ball game. The fourth row,
+**ARCADE**, opens the [Arcade](#arcade) games, which train no stat. The three training games share:
 
 - A **3-2-1 countdown** (1.8 s) before the clock starts. Nothing scores during it.
 - A **COMBO** with a multiplier **x1 below 5, x2 from 5, x3 from 10** in a row.
@@ -1165,7 +1172,8 @@ Design and the swap protocol: `docs/adventure-friends.md`.
 
 #### Arcade
 
-ADVENTURE > ARCADE (hub page 2, third row). Four short games played for fun,
+**Dumbbell > ARCADE** (the training menu's fourth row; it was ADVENTURE page 2
+until v3.20). Four short games played for fun,
 joy and the bond -- they train **no stat** (that is what the
 [Training games](#training-games) are for). The list shows each game with your
 best score; a star marks a game you have S-ranked. The row is greyed, and no

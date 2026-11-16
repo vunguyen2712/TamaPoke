@@ -1155,7 +1155,7 @@ void renderArcade() {
 void arcadeTap(int16_t x, int16_t y) {
   uint32_t now = millis();
   if (arcGame == ARC_NONE) {
-    if (featBackHit(x, y)) { sfxPlay(SFX_TAP); featBackToHub(); arcadeOpen = false; return; }
+    if (featBackHit(x, y)) { sfxPlay(SFX_TAP); arcadeBack(); return; }
     int r = arcRowAt(x, y);
     if (r >= 0) arcStart((uint8_t)r);
     return;
@@ -1183,16 +1183,17 @@ void arcadeTouchPeek(bool pressed, int16_t x, int16_t y) {
   catGoal = catClampX(x);
 }
 
-// Horizontal: on the list, back to the hub; in a game, leave it banking --
+// Horizontal: on the list, back to the training menu; in a game, leave it banking --
 // except BERRY CATCH, where a horizontal drag is how you play.
 void arcadeSwipe(int dir) {
   (void)dir;
-  if (arcGame == ARC_NONE) { featBackToHub(); return; }
+  if (arcGame == ARC_NONE) { arcadeBack(); return; }
   if (arcOver) { arcGame = ARC_NONE; arcOver = false; return; }
   if (arcGame == ARC_CATCH) return;
   arcLeave();
 }
-// Vertical: one level back -- a game (banked) to the list, the list to the hub.
+// Vertical: one level back -- a game (banked) to the list, the list to the
+// training menu (featSwipeV does that part).
 // True when it was handled here.
 bool arcadeSwipeV(int dir) {
   (void)dir;
@@ -1202,10 +1203,33 @@ bool arcadeSwipeV(int dir) {
   return true;
 }
 
-// ---- hub hooks
-void arcadeHubLabel(char *out, size_t n, const char *label) { snprintf(out, n, "%s", label); }
-bool arcadeHubEnabled() { return arcadeAllowed(); }
+// ---- training-menu hooks (since v3.20 the arcade is the TRAIN panel's 4th row,
+// not an Adventure hub row: the menu with the games is where games are looked for)
+const char *arcadeTitle() { return TL(S_ARC_TITLE); }
+bool arcadeEnabled() { return arcadeAllowed(); }
+// The four game names in the player's language, for the row's second line.
+// Cut to fit the row (46 small characters) rather than overflowing it.
+void arcadeGamesLine(char *out, size_t n) {
+  size_t cap = n < 47 ? n : 47;
+  out[0] = 0;
+  for (uint8_t g = 0; g < ARC_GAMES; g++) {
+    size_t l = strlen(out);
+    snprintf(out + l, cap - l, g ? "  %s" : "%s", TL(arcName(g)));
+    if (strlen(out) + 1 >= cap) break;
+  }
+}
 void arcadeOpened() { arcGame = ARC_NONE; arcOver = false; arcLoad(); }
+void arcadeOpenFromTrain() {
+  featCloseAll();
+  trainOpen = false;
+  arcadeOpen = true;
+  arcadeOpened();
+}
+// The list's way out: back to the training menu it was opened from.
+void arcadeBack() {
+  arcadeClose();
+  trainOpen = true;
+}
 // Closing the screen from anywhere (featCloseAll) banks a game in progress.
 void arcadeClose() {
   if (arcadeOpen && arcGame != ARC_NONE) arcLeave();

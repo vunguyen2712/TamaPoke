@@ -149,19 +149,19 @@ int main(int argc, char **argv) {
   if (!trainOpen) { printf("FAIL: train icon did not open the submenu\n"); return 1; }
   printf("PASS: 5th icon opens the training submenu\n");
 
-  click(233, 178);                       // row 0 == STRENGTH == TRAIN_ROW_Y(0)+28
+  click(233, 154);                       // row 0 == STRENGTH == TRAIN_ROW_Y(0)+28
   if (!sackOpen) { printf("FAIL: STRENGTH row did not start the sack\n"); return 1; }
   printf("PASS: STRENGTH routes to the punching bag\n");
   sackOpen = false;
 
   click(tbx, tby);
-  click(233, 242);                       // row 1 == SPEED == TRAIN_ROW_Y(1)+28
+  click(233, 218);                       // row 1 == SPEED == TRAIN_ROW_Y(1)+28
   if (!spdOpen) { printf("FAIL: SPEED row did not start the reaction test\n"); return 1; }
   printf("PASS: SPEED routes to the reaction test\n");
   spdOpen = false;
 
   click(tbx, tby);
-  click(233, 306);                       // row 2 == DEFENCE -> the ball game
+  click(233, 282);                       // row 2 == DEFENCE -> the ball game
   if (!gameOpen) { printf("FAIL: DEFENCE row did not start the ball game\n"); return 1; }
   printf("PASS: DEFENCE routes to the ball game\n");
   gameOpen = false;
