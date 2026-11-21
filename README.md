@@ -81,7 +81,7 @@ are in the **Game manual** below.
   - Creatures stand on white platforms over a floor with depth.
   - Colour-coded FIGHT, POKEMON and RUN buttons, with moves coloured by type.
   - A new win screen with a sunburst behind the badge.
-- **Arcade**: four new mini games (in the training menu since v3.20).
+- **Arcade**: four new mini games, in the training menu since v3.20, with A/S rank prizes since v3.21.
   - **Berry Catch:** catch berries in a basket, dodge rocks.
   - **Memory:** match pairs of type symbols.
   - **Echo:** repeat a growing sequence on four type pads.
